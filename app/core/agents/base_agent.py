@@ -1,10 +1,23 @@
 """
 Base Agent Module
-Defines the abstract interface that all EMADS worker agents must implement.
+
+This module defines the abstract *BaseAgent* class, which serves as the contract
+for all concrete agents in the EMADS pipeline. Each agent encapsulates a distinct
+step of the data‑science workflow (e.g., data understanding, EDA, preprocessing,
+model training, evaluation, reporting). By inheriting from *BaseAgent*, agents
+ensure a consistent interface for execution and state mutation, facilitating
+orchestration by the *SupervisorAgent*.
+
+The module also provides the *PartialEMADSState* type alias, representing the
+partial dictionary of state updates that an agent returns to the shared
+*EMADSState* container.
 """
 
 from abc import ABC, abstractmethod
 from app.core.state.emads_state import EMADSState
+
+# Type alias to represent a partial dictionary update returned by agents to LangGraph
+PartialEMADSState = dict
 
 
 class BaseAgent(ABC):
@@ -35,7 +48,3 @@ class BaseAgent(ABC):
                   updated or created by this specific agent.
         """
         pass
-
-
-# Type alias to represent a partial dictionary update returned by agents to LangGraph
-PartialEMADSState = dict

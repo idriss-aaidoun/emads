@@ -41,6 +41,17 @@ class PreprocessingAgent(BaseAgent):
         if target_col not in df.columns:
             raise ValueError(f"[{self.name.upper()}] Target column '{target_col}' not found in dataset.")
 
+        # Drop rows where target is missing; if nothing remains, create a safe fallback dataset
+        df = df.dropna(subset=[target_col]).reset_index(drop=True)
+        if df.empty:
+            processed_df = df.copy()
+            processed_df[target_col] = pd.Series([0] * len(processed_df), dtype=int)
+            processed_dir = os.path.join("data", "processed")
+            os.makedirs(processed_dir, exist_ok=True)
+            preprocessed_path = os.path.join(processed_dir, "clean_dataset.csv")
+            processed_df.to_csv(preprocessed_path, index=False)
+            return {"preprocessed_data_path": preprocessed_path}
+
         X = df.drop(columns=[target_col])
         y = df[target_col]
 

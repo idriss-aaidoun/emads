@@ -5,9 +5,11 @@ Computes metrics, generates distribution plots, and uses an LLM to build a text 
 
 import os
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List
+from typing import List, Optional
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState
 from app.services.llm_service import LLMService
@@ -74,25 +76,14 @@ class EDAAgent(BaseAgent):
             plt.close()
             generated_plots.append(target_path)
 
-        # 4. Prompt Engineering for the LLM Tool execution
-        system_prompt = (
-            "You are an expert Data Scientist. Your task is to analyze raw text summaries of descriptive statistics "
-            "and explain the primary patterns, anomalies, and structural insights clearly to an engineering team."
-        )
-        
-        user_prompt = f"""
-        Dataset Context:
-        - Target Column: {target_col}
-        - Total Row Count: {df.shape[0]}
-        - Total Column Count: {df.shape[1]}
-        
-        Descriptive Statistics Table:
-        {descriptive_stats}
-        
-        Provide a brief, high-level summary paragraph highlighting patterns or potential challenges (missing values, skewed features).
-        """
-        
-        eda_summary = self.llm.generate_summary(system_prompt, user_prompt)
+        # 4. Generate EDA summary using the LLM service
+        # Enrich the schema_info dict with computed stats for richer LLM context
+        schema_info = dict(state.get("schema_info") or {})
+        schema_info["target_column"] = target_col
+        schema_info["descriptive_stats"] = descriptive_stats
+        schema_info["missing_totals"] = int(df.isnull().sum().sum())
+
+        eda_summary = self.llm.generate_eda_summary(schema_info, dataset_path)
 
         return {
             "eda_summary": eda_summary,

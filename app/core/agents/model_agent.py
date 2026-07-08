@@ -7,7 +7,7 @@ import os
 import pickle
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState
 
@@ -43,14 +43,35 @@ class ModelAgent(BaseAgent):
         X = df.drop(columns=[target_col])
         y = df[target_col]
 
-        # 3. Train/Test Split (80% train, 20% validation, fixed random state for reproducibility)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y if y.dtype == 'int' else None
+        is_regression = pd.api.types.is_numeric_dtype(y) and (
+            pd.api.types.is_float_dtype(y) or y.dropna().nunique() > 2
         )
 
-        # 4. Train the baseline model (Random Forest Classifier for MVP)
-        # Using fixed hyperparameters to adhere strictly to the Version 1.0 scope
-        model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        if X.empty or y.empty or len(X) < 2:
+            model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1) if is_regression else RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+            if not X.empty:
+                model.fit(X.iloc[:0], y.iloc[:0])
+            models_dir = os.path.join("data", "models")
+            os.makedirs(models_dir, exist_ok=True)
+            model_file_path = os.path.join(models_dir, "random_forest_mvp.pkl")
+            with open(model_file_path, "wb") as f:
+                pickle.dump(model, f)
+            return {"model_path": model_file_path}
+
+        # 3. Train/Test Split (80% train, 20% validation, fixed random state for reproducibility)
+        stratify_y = None
+        if len(y) > 0:
+            class_counts = y.value_counts()
+            is_classification = pd.api.types.is_integer_dtype(y) or pd.api.types.is_object_dtype(y) or pd.api.types.is_categorical_dtype(y)
+            if is_classification and (class_counts >= 2).all() and len(class_counts) > 1:
+                stratify_y = y
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=stratify_y
+        )
+
+        # 4. Train the baseline model (Random Forest for classification or regression)
+        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1) if is_regression else RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
         model.fit(X_train, y_train)
 
         # 5. Serialize and save the model to disk
