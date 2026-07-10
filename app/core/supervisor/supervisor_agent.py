@@ -10,7 +10,7 @@ from app.core.state.emads_state import EMADSState
 from app.core.agents.data_understanding_agent import DataUnderstandingAgent
 from app.core.agents.eda_agent import EDAAgent
 from app.core.agents.preprocessing_agent import PreprocessingAgent
-from app.core.agents.model_agent import ModelAgent
+from app.core.agents.model_selection_agent import ModelAgent
 from app.core.agents.evaluation_agent import EvaluationAgent
 from app.core.agents.reporting_agent import ReportingAgent
 
