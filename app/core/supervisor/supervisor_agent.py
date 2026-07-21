@@ -1,78 +1,106 @@
 """
 Supervisor Agent Module
-Orchestrates the sequential multi-agent execution pipeline using LangGraph.
+========================
+
+Orchestrates the full EMADS pipeline as a sequential LangGraph workflow.
+
+The Supervisor's ONLY responsibilities:
+  - decide which agent runs, and in what order
+  - catch failures so one broken agent doesn't crash the whole app with a
+    raw traceback
+  - track which step is currently running, for the Streamlit progress UI
+
+It never touches data, trains models, or computes metrics itself.
 """
+
+from typing import Callable
 
 from langgraph.graph import StateGraph, START, END
 from app.core.state.emads_state import EMADSState
 
-# Import concrete agent implementations
 from app.core.agents.data_understanding_agent import DataUnderstandingAgent
 from app.core.agents.eda_agent import EDAAgent
 from app.core.agents.preprocessing_agent import PreprocessingAgent
-from app.core.agents.model_selection_agent import ModelAgent
+from app.core.agents.model_selection_agent import ModelSelectionAgent
+from app.core.agents.hyperparameter_agent import HyperparameterAgent
 from app.core.agents.evaluation_agent import EvaluationAgent
+from app.core.agents.explainability_agent import ExplainabilityAgent
 from app.core.agents.reporting_agent import ReportingAgent
 
 
 class SupervisorAgent:
     """
-    Manages the compilation and linear execution of the EMADS multi-agent system.
-    Follows a strict sequential pipeline layout for Version 1.0.
+    Builds and runs the EMADS pipeline as a linear LangGraph state machine.
     """
 
     def __init__(self) -> None:
-        # Instantiate all worker agents
-        self.data_understanding = DataUnderstandingAgent()
-        self.eda = EDAAgent()
-        self.preprocessing = PreprocessingAgent()
-        self.model = ModelAgent()
-        self.evaluation = EvaluationAgent()
-        self.reporting = ReportingAgent()
-        
-        # Compile the workflow graph
+        # Single source of truth for pipeline order. To add/remove/reorder a
+        # step later, edit only this list — nothing else needs to change.
+        self.pipeline_steps: list[tuple[str, object]] = [
+            ("data_understanding", DataUnderstandingAgent()),
+            ("eda", EDAAgent()),
+            ("preprocessing", PreprocessingAgent()),
+            ("model_selection", ModelSelectionAgent()),
+            ("hyperparameter_optimization", HyperparameterAgent()),
+            ("evaluation", EvaluationAgent()),
+            ("explainability", ExplainabilityAgent()),
+            ("reporting", ReportingAgent()),
+        ]
         self.workflow = self._build_workflow_graph()
 
+    def _wrap(self, step_name: str, agent) -> Callable[[EMADSState], dict]:
+        """
+        Wraps a single agent's execute() so every node in the graph gets,
+        for free, without repeating this code in each agent:
+          1. `current_step` updated in the state (drives the UI progress bar)
+          2. a standard success log line
+          3. exceptions turned into a clear, labeled RuntimeError instead of
+             a raw traceback surfacing in Streamlit
+        """
+        def node(state: EMADSState) -> dict:
+            try:
+                update = dict(agent.execute(state) or {})
+                update["current_step"] = step_name
+                update.setdefault("logs", []).append(
+                    self._format_log(step_name, "completed successfully")
+                )
+                return update
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Pipeline stopped at step '{step_name}': {exc}"
+                ) from exc
+        return node
+
+    @staticmethod
+    def _format_log(step_name: str, message: str) -> str:
+        return f"[SUPERVISOR] Step '{step_name}' {message}."
+
     def _build_workflow_graph(self):
-        """
-        Constructs the internal state graph layout, adding nodes and edges.
-        """
-        # 1. Initialize the Graph container tied to our State TypedDict schema
         builder = StateGraph(EMADSState)
 
-        # 2. Define and map nodes (LangGraph requires functions or methods matching state signatures)
-        builder.add_node("data_understanding", lambda state: self.data_understanding.execute(state))
-        builder.add_node("eda", lambda state: self.eda.execute(state))
-        builder.add_node("preprocessing", lambda state: self.preprocessing.execute(state))
-        builder.add_node("model", lambda state: self.model.execute(state))
-        builder.add_node("evaluation", lambda state: self.evaluation.execute(state))
-        builder.add_node("reporting", lambda state: self.reporting.execute(state))
+        for step_name, agent in self.pipeline_steps:
+            builder.add_node(step_name, self._wrap(step_name, agent))
 
-        # 3. Create strict sequential edges (Control flow path mapping)
-        builder.add_edge(START, "data_understanding")
-        builder.add_edge("data_understanding", "eda")
-        builder.add_edge("eda", "preprocessing")
-        builder.add_edge("preprocessing", "model")
-        builder.add_edge("model", "evaluation")
-        builder.add_edge("evaluation", "reporting")
-        builder.add_edge("reporting", END)
+        builder.add_edge(START, self.pipeline_steps[0][0])
+        for (current_step, _), (next_step, _) in zip(self.pipeline_steps, self.pipeline_steps[1:]):
+            builder.add_edge(current_step, next_step)
+        builder.add_edge(self.pipeline_steps[-1][0], END)
 
-        # 4. Compile into a runnable component application
         return builder.compile()
 
     def run_pipeline(self, initial_state: EMADSState) -> EMADSState:
         """
-        Triggers the workflow synchronously with a given starting state configuration.
-        
-        Args:
-            initial_state (EMADSState): Contains 'dataset_path' and optional 'target_column'.
-            
-        Returns:
-            EMADSState: The complete, updated state with all generated pipeline results.
+        Runs the compiled graph from start to end.
+
+        Note on failure handling: the pipeline stops at the first failing
+        step rather than trying to "skip and continue". In a Data Science
+        pipeline this is the correct behavior — e.g. running Evaluation
+        after Model Selection crashed would just produce a second,
+        confusing error instead of a useful result.
         """
         try:
-            # invoke runs the compiled graph until it hits the END state node
-            final_output_state = self.workflow.invoke(initial_state)
-            return final_output_state
-        except Exception as e:
-            raise RuntimeError(f"[SUPERVISOR ENGINE ERROR] Pipeline failed during execution: {str(e)}")
+            return self.workflow.invoke(initial_state)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(f"[SUPERVISOR ENGINE ERROR] Unexpected failure: {exc}") from exc
