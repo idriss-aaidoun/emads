@@ -1,91 +1,97 @@
 """
 Exploratory Data Analysis (EDA) Agent Module
-Computes metrics, generates distribution plots, and uses an LLM to build a text summary.
+==============================================
+
+Consumes the schema built by the Data Understanding Agent, computes
+descriptive statistics, generates visualizations (correlation, missing
+values, distributions, class balance, outliers), and asks the LLM to turn
+all of it into a natural language explanation.
 """
 
-import os
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import List, Optional
+
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState
 from app.services.llm_service import LLMService
+from app.utils import plot_utils
+
+# Limit the number of distribution plots generated for wide datasets,
+# to avoid producing dozens of figures / a huge report.
+MAX_DISTRIBUTION_PLOTS = 6
 
 
 class EDAAgent(BaseAgent):
     """
-    Agent handling descriptive statistics, correlation matrices, plotting,
-    and delegating qualitative insights generation to the LLM.
+    Agent responsible for the exploratory analysis: statistics, plots,
+    outlier detection, and an LLM-generated narrative summary.
     """
 
     def __init__(self, llm_service: Optional[LLMService] = None) -> None:
         super().__init__(name="eda_agent")
-        # Dependency injection for the LLM infrastructure layer
         self.llm = llm_service if llm_service else LLMService()
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
-        """
-        Performs EDA profiling, outputs static graphs, and prompts the LLM for a narrative rundown.
-        """
         dataset_path = state.get("dataset_path")
-        target_col = state.get("target_column")
-        
-        if not dataset_path:
-            raise ValueError(f"[{self.name.upper()}] 'dataset_path' is missing from the state.")
+        target_column = state.get("target_column")
+        problem_type = state.get("problem_type") or "classification"
+        schema_info = state.get("schema_info") or {}
+        numerical_columns: List[str] = schema_info.get("numerical_columns", [])
 
-        # 1. Load the dataset
+        if not dataset_path:
+            raise ValueError("'dataset_path' is missing from the state.")
+
         df = pd.read_csv(dataset_path)
-        
-        # Ensure a directory exists for storing intermediate validation plots
-        plots_dir = os.path.join("data", "plots")
-        os.makedirs(plots_dir, exist_ok=True)
-        
+
         generated_plots: List[str] = []
 
-        # 2. Compute Mathematical Statistics for the LLM prompt context
-        descriptive_stats = df.describe(include='all').to_string()
-        
-        # 3. Process Visual Graphics (Correlation Matrix for numerical columns)
-        numeric_df = df.select_dtypes(include=['number'])
-        if not numeric_df.empty and len(numeric_df.columns) > 1:
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
-            plt.title("Numerical Feature Correlations")
-            plt.tight_layout()
-            
-            corr_path = os.path.join(plots_dir, "correlation_matrix.png")
-            plt.savefig(corr_path)
-            plt.close()
-            generated_plots.append(corr_path)
+        corr_plot = plot_utils.plot_correlation_heatmap(df, numerical_columns)
+        if corr_plot:
+            generated_plots.append(corr_plot)
 
-        # Target column distribution tracking
-        if target_col and target_col in df.columns:
-            plt.figure(figsize=(6, 4))
-            if df[target_col].nunique() <= 10 or not pd.api.types.is_numeric_dtype(df[target_col]):
-                sns.countplot(x=target_col, data=df)
-            else:
-                sns.histplot(df[target_col], kde=True)
-            plt.title(f"Target Distribution: {target_col}")
-            plt.tight_layout()
-            
-            target_path = os.path.join(plots_dir, "target_distribution.png")
-            plt.savefig(target_path)
-            plt.close()
-            generated_plots.append(target_path)
+        missing_plot = plot_utils.plot_missing_values(df)
+        if missing_plot:
+            generated_plots.append(missing_plot)
 
-        # 4. Generate EDA summary using the LLM service
-        # Enrich the schema_info dict with computed stats for richer LLM context
-        schema_info = dict(state.get("schema_info") or {})
-        schema_info["target_column"] = target_col
-        schema_info["descriptive_stats"] = descriptive_stats
-        schema_info["missing_totals"] = int(df.isnull().sum().sum())
+        for col in numerical_columns[:MAX_DISTRIBUTION_PLOTS]:
+            generated_plots.append(plot_utils.plot_distribution(df, col))
 
-        eda_summary = self.llm.generate_eda_summary(schema_info, dataset_path)
+        if target_column and target_column in df.columns:
+            generated_plots.append(
+                plot_utils.plot_target_balance(df, target_column, problem_type)
+            )
+
+        outliers = plot_utils.detect_outliers_iqr(df, numerical_columns)
+
+        eda_stats = {
+            "descriptive_stats": df.describe(include="all").to_dict(),
+            "outliers_per_column": outliers,
+            "total_missing_values": int(df.isnull().sum().sum()),
+        }
+
+        outlier_decision = self.decide(
+            decision=f"Flagged {len(outliers)} column(s) with outliers"
+            if outliers else "No significant outliers detected",
+            reasoning=(
+                f"Used the 1.5*IQR rule on numerical columns. "
+                f"Columns with outliers: {list(outliers.keys())}" if outliers
+                else "All numerical columns fall within 1.5*IQR of their quartiles."
+            ),
+            confidence=0.7,
+        )
+
+        eda_summary = self.llm.generate_eda_summary(
+            {**schema_info, **eda_stats, "target_column": target_column},
+            dataset_path,
+        )
 
         return {
+            "eda_stats": eda_stats,
             "eda_summary": eda_summary,
-            "generated_plots": generated_plots
+            "generated_plots": generated_plots,
+            "agent_decisions": [outlier_decision],
+            "logs": [self.log(
+                f"Generated {len(generated_plots)} plot(s), "
+                f"detected outliers in {len(outliers)} column(s)."
+            )],
         }

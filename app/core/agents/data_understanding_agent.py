@@ -15,7 +15,7 @@ import pandas as pd
 from typing import Any, Dict, List
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState
+from app.core.state.emads_state import EMADSState , AgentDecision
 
 # Column names commonly used for the target variable — helps the heuristic
 # below make a better guess than "always pick the last column".
@@ -128,7 +128,7 @@ class DataUnderstandingAgent(BaseAgent):
         user_target: str | None,
         categorical_columns: List[str],
         numerical_columns: List[str],
-    ) -> tuple[str, "AgentDecisionLike"]:
+    ) -> tuple[str, AgentDecision]:
         """
         Decides which column is the target. Priority:
           1. User-provided target (if it exists in the dataset)
@@ -165,7 +165,7 @@ class DataUnderstandingAgent(BaseAgent):
             confidence=0.4,
         )
 
-    def _infer_problem_type(self, df: pd.DataFrame, target_column: str) -> tuple[str, "AgentDecisionLike"]:
+    def _infer_problem_type(self, df: pd.DataFrame, target_column: str) -> tuple[str, AgentDecision]:
         """
         Classification if the target is non-numeric, or numeric with a small
         number of unique values (e.g. 0/1, or a handful of classes).
