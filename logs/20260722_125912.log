@@ -1,0 +1,4 @@
+12:59:12 [INFO] emads.llm: LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+12:59:13 [INFO] emads.llm: Groq client initialized successfully.
+12:59:13 [INFO] emads.llm: LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=17 user_chars=18
+12:59:13 [INFO] emads.llm: LLM response received: model=llama-3.1-8b-instant chars=2

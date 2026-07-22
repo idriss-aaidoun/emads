@@ -1,91 +1,209 @@
 """
-Model Agent Module
-Handles data splitting and training a baseline Random Forest model.
+Model Selection Agent Module
+==============================
+
+Replaces the V1 "always Random Forest" approach. Compares several candidate
+algorithms using cross-validation on the training split, selects the best
+one, and explains WHY it was chosen over the alternatives — the core
+"explainable AutoML" contribution of the project.
+
+XGBoost and LightGBM are used only if installed; the agent degrades
+gracefully to scikit-learn-only candidates otherwise, so the pipeline never
+breaks because of an optional dependency.
 """
 
 import os
 import pickle
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from typing import Any, Dict, List
+
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState
 
+MODELS_DIR = os.path.join("data", "outputs", "models")
+CV_FOLDS = 5
+RANDOM_STATE = 42
 
-class ModelAgent(BaseAgent):
+# Optional boosted-tree libraries — only used if actually installed.
+try:
+    from xgboost import XGBClassifier, XGBRegressor
+    _HAS_XGBOOST = True
+except ImportError:
+    _HAS_XGBOOST = False
+
+try:
+    from lightgbm import LGBMClassifier, LGBMRegressor
+    _HAS_LIGHTGBM = True
+except ImportError:
+    _HAS_LIGHTGBM = False
+
+
+class ModelSelectionAgent(BaseAgent):
     """
-    Agent responsible for training a standalone baseline Random Forest model.
-    Operates strictly deterministically without LLM dependencies.
+    Agent responsible for comparing candidate ML algorithms via
+    cross-validation and selecting the best-performing one.
     """
 
     def __init__(self) -> None:
-        super().__init__(name="model_agent")
+        super().__init__(name="model_selection_agent")
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
-        """
-        Splits the dataset, fits a Random Forest, and serializes the model to disk.
-        """
+        self.logger.info("execute() started")
         data_path = state.get("preprocessed_data_path")
-        target_col = state.get("target_column")
+        target_column = state.get("target_column")
+        problem_type = state.get("problem_type")
 
-        if not data_path:
-            raise ValueError(f"[{self.name.upper()}] 'preprocessed_data_path' is missing from state.")
-        if not target_col:
-            raise ValueError(f"[{self.name.upper()}] 'target_column' is missing from state.")
+        if not data_path or not target_column or not problem_type:
+            self.logger.error(
+                "Missing required state keys — data_path=%s target_column=%s problem_type=%s",
+                bool(data_path), bool(target_column), bool(problem_type),
+            )
+            raise ValueError(
+                "Missing required state inputs: 'preprocessed_data_path', "
+                "'target_column' or 'problem_type'."
+            )
 
-        # 1. Load preprocessed data
+        self.logger.debug("Loading preprocessed data from: %s", data_path)
         df = pd.read_csv(data_path)
+        X = df.drop(columns=[target_column])
+        y = df[target_column]
 
-        if target_col not in df.columns:
-            raise ValueError(f"[{self.name.upper()}] Target column '{target_col}' not found in data.")
-
-        # 2. Separate features and labels
-        X = df.drop(columns=[target_col])
-        y = df[target_col]
-
-        is_regression = pd.api.types.is_numeric_dtype(y) and (
-            pd.api.types.is_float_dtype(y) or y.dropna().nunique() > 2
+        # Recreate the exact same split used by the Evaluation Agent, so the
+        # test set is never touched here (no leakage) and metrics stay comparable.
+        stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
+        X_train, _, y_train, _ = train_test_split(
+            X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
         )
 
-        if X.empty or y.empty or len(X) < 2:
-            model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1) if is_regression else RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-            if not X.empty:
-                model.fit(X.iloc[:0], y.iloc[:0])
-            models_dir = os.path.join("data", "models")
-            os.makedirs(models_dir, exist_ok=True)
-            model_file_path = os.path.join(models_dir, "random_forest_mvp.pkl")
-            with open(model_file_path, "wb") as f:
-                pickle.dump(model, f)
-            return {"model_path": model_file_path}
+        candidates = self._build_candidates(problem_type)
+        cv = self._build_cv_splitter(problem_type, y_train)
+        scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
 
-        # 3. Train/Test Split (80% train, 20% validation, fixed random state for reproducibility)
-        stratify_y = None
-        if len(y) > 0:
-            class_counts = y.value_counts()
-            is_classification = pd.api.types.is_integer_dtype(y) or pd.api.types.is_object_dtype(y) or pd.api.types.is_categorical_dtype(y)
-            if is_classification and (class_counts >= 2).all() and len(class_counts) > 1:
-                stratify_y = y
+        results: List[Dict[str, Any]] = []
+        for model_name, model in candidates.items():
+            try:
+                scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+                mean_s, std_s = float(np.mean(scores)), float(np.std(scores))
+                self.logger.info(
+                    "CV result — model=%s score=%.4f±%.4f metric=%s",
+                    model_name, mean_s, std_s, scoring,
+                )
+                results.append({
+                    "model_name": model_name,
+                    "mean_score": mean_s,
+                    "std_score": std_s,
+                    "scoring_metric": scoring,
+                })
+            except Exception as exc:
+                self.logger.warning("CV failed for model=%s error=%s", model_name, exc)
+                results.append({
+                    "model_name": model_name,
+                    "mean_score": float("-inf"),
+                    "std_score": 0.0,
+                    "scoring_metric": scoring,
+                    "error": str(exc),
+                })
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=stratify_y
+        results.sort(key=lambda r: r["mean_score"], reverse=True)
+        best_result = results[0]
+        best_model_name = best_result["model_name"]
+        best_model = candidates[best_model_name]
+
+        # Fit the winning model on the full training split (final trained artifact).
+        best_model.fit(X_train, y_train)
+
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
+        with open(model_path, "wb") as f:
+            pickle.dump(best_model, f)
+
+        selection_decision = self.decide(
+            decision=f"Selected '{best_model_name}' as the final model",
+            reasoning=self._build_reasoning(best_result, results, scoring),
+            confidence=self._confidence_from_margin(results),
         )
 
-        # 4. Train the baseline model (Random Forest for classification or regression)
-        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1) if is_regression else RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-        model.fit(X_train, y_train)
-
-        # 5. Serialize and save the model to disk
-        models_dir = os.path.join("data", "models")
-        os.makedirs(models_dir, exist_ok=True)
-        model_file_path = os.path.join(models_dir, "random_forest_mvp.pkl")
-
-        try:
-            with open(model_file_path, "wb") as f:
-                pickle.dump(model, f)
-        except Exception as e:
-            raise RuntimeError(f"[{self.name.upper()}] Failed to serialize the trained model: {str(e)}")
-
-        # Return the model path so the Evaluation Agent can load it
+        self.logger.info(
+            "execute() complete — selected_model=%s score=%.4f model_saved=%s",
+            best_model_name, best_result['mean_score'], model_path,
+        )
         return {
-            "model_path": model_file_path
+            "candidate_models_results": results,
+            "selected_model_name": best_model_name,
+            "model_path": model_path,
+            "agent_decisions": [selection_decision],
+            "logs": [self.log(
+                f"Compared {len(candidates)} model(s) via {CV_FOLDS}-fold CV. "
+                f"Selected '{best_model_name}' (score={best_result['mean_score']:.4f})."
+            )],
         }
+
+    # ------------------------------------------------------------------
+    # Internal steps
+    # ------------------------------------------------------------------
+
+    def _build_candidates(self, problem_type: str) -> Dict[str, Any]:
+        if problem_type == "classification":
+            candidates: Dict[str, Any] = {
+                "LogisticRegression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+                "DecisionTree": DecisionTreeClassifier(random_state=RANDOM_STATE),
+                "RandomForest": RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1),
+            }
+            if _HAS_XGBOOST:
+                candidates["XGBoost"] = XGBClassifier(
+                    random_state=RANDOM_STATE, eval_metric="logloss", verbosity=0
+                )
+            if _HAS_LIGHTGBM:
+                candidates["LightGBM"] = LGBMClassifier(random_state=RANDOM_STATE, verbosity=-1)
+        else:
+            candidates = {
+                "LinearRegression": LinearRegression(),
+                "DecisionTree": DecisionTreeRegressor(random_state=RANDOM_STATE),
+                "RandomForest": RandomForestRegressor(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1),
+            }
+            if _HAS_XGBOOST:
+                candidates["XGBoost"] = XGBRegressor(random_state=RANDOM_STATE, verbosity=0)
+            if _HAS_LIGHTGBM:
+                candidates["LightGBM"] = LGBMRegressor(random_state=RANDOM_STATE, verbosity=-1)
+        return candidates
+
+    def _build_cv_splitter(self, problem_type: str, y_train: pd.Series):
+        if problem_type == "classification":
+            min_class_count = y_train.value_counts().min()
+            if min_class_count >= 2:
+                n_folds = max(2, min(CV_FOLDS, int(min_class_count)))
+                return StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_STATE)
+        n_splits = max(2, min(CV_FOLDS, len(y_train)))
+        return KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+
+    def _build_reasoning(self, best: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
+        others = [r for r in all_results if r["model_name"] != best["model_name"]]
+        comparison = ", ".join(
+            f"{r['model_name']}={r['mean_score']:.4f}" for r in others
+        )
+        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        return (
+            f"'{best['model_name']}' achieved the best mean {metric_label} "
+            f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) across {CV_FOLDS}-fold "
+            f"cross-validation on the training set. Other candidates scored: {comparison}."
+        )
+
+    def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
+        """
+        Confidence reflects how clearly the winner beat the runner-up, not
+        just the raw score. A close race between the top 2 models means the
+        choice is less "confident" even if the winning score is high.
+        """
+        if len(results) < 2:
+            return 0.9
+        best_score, second_score = results[0]["mean_score"], results[1]["mean_score"]
+        margin = abs(best_score - second_score)
+        # Normalize: a margin >= 0.05 (5 accuracy points, or 0.05 RMSE units) is
+        # treated as a clearly confident win.
+        return float(min(0.95, 0.5 + margin * 10))

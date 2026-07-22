@@ -1,47 +1,85 @@
 """
 EMADS State Module
-Defines the schema for the shared short-term memory passed between agents.
+===================
+
+Defines the shared memory (blackboard) passed between all agents of the
+EMADS pipeline. Every agent reads from this state and returns a *partial*
+update to it — never a full replacement.
+
+Two categories of fields exist:
+
+1. Fields that agents OVERWRITE (e.g. `metrics`, `model_path`) — each agent
+   owns its own fields and is the only one allowed to write them.
+2. Fields that ACCUMULATE across agents (`logs`, `agent_decisions`, `errors`)
+   — every agent appends to them instead of overwriting. These use
+   `Annotated[..., operator.add]` so LangGraph merges them automatically
+   instead of one agent erasing another's entries.
 """
 
-from typing import TypedDict, Any, Optional, Dict, List
+from typing import TypedDict, Any, Optional, Dict, List, Annotated
+from dataclasses import dataclass, field
+from datetime import datetime
+import operator
 
 
-class EMADSState(TypedDict):
-    """
-    Represents the shared, centralized state of the EMADS pipeline.
-    Each key represents an artifact produced or consumed by the agents.
-    """
+@dataclass
+class AgentDecision:
+    agent_name: str
+    decision: str
+    reasoning: str
+    confidence: Optional[float] = None
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
-    # --- Data Input & Specification ---
+
+class EMADSState(TypedDict, total=False):
+    session_id: str
+    created_at: str
+    current_step: str
+
     dataset_path: str
-    """The local file system path to the uploaded CSV/Parquet dataset."""
-    
+    dataset_name: Optional[str]
     target_column: Optional[str]
-    """The name of the target variable chosen for modeling."""
+    problem_type: Optional[str]
 
-    # --- Data Understanding Agent Output ---
     schema_info: Optional[Dict[str, Any]]
-    """Inferred structural schema containing column names, data types, and null counts."""
 
-    # --- EDA Agent Output ---
     eda_summary: Optional[str]
-    """LLM-generated textual summary explaining structural and statistical insights."""
-    
+    eda_stats: Optional[Dict[str, Any]]
     generated_plots: Optional[List[str]]
-    """List of local file paths pointing to the generated distribution and correlation plots."""
 
-    # --- Preprocessing Agent Output ---
+    preprocessing_report: Optional[Dict[str, Any]]
     preprocessed_data_path: Optional[str]
-    """Path to the cleaned, encoded, and normalized dataset stored temporarily."""
+    selected_features: Optional[List[str]]
 
-    # --- Model Agent Output ---
+    candidate_models_results: Optional[List[Dict[str, Any]]]
+    selected_model_name: Optional[str]
     model_path: Optional[str]
-    """Path to the serialized, trained Random Forest model artifact (.pkl or .joblib)."""
 
-    # --- Evaluation Agent Output ---
+    best_hyperparameters: Optional[Dict[str, Any]]
+    optimization_summary: Optional[Dict[str, Any]]
+
     metrics: Optional[Dict[str, Any]]
-    """Dictionary containing metrics like Accuracy, Precision, Recall, F1, and Confusion Matrix data."""
+    evaluation_plots: Optional[List[str]]
 
-    # --- Reporting Agent Output ---
+    feature_importance: Optional[Dict[str, float]]
+    shap_plots: Optional[List[str]]
+    explainability_summary: Optional[str]
+
     report_path: Optional[str]
-    """The local file path to the final generated PDF report."""
+
+    agent_decisions: Annotated[List[AgentDecision], operator.add]
+    logs: Annotated[List[str], operator.add]
+    errors: Annotated[List[str], operator.add]
+
+
+def create_initial_state(dataset_path: str, dataset_name: Optional[str] = None) -> EMADSState:
+    return EMADSState(
+        session_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
+        created_at=datetime.now().isoformat(),
+        current_step="data_understanding",
+        dataset_path=dataset_path,
+        dataset_name=dataset_name,
+        agent_decisions=[],
+        logs=[],
+        errors=[],
+    )

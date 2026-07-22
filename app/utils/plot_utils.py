@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from typing import Dict, List
+from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay
 
 OUTPUT_DIR = os.path.join("data", "outputs", "plots")
 
@@ -43,6 +44,26 @@ def plot_correlation_heatmap(df: pd.DataFrame, numerical_columns: List[str]) -> 
     sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
     plt.title("Feature Correlation Matrix")
     return save_current_figure("correlation_matrix.png")
+
+def plot_confusion_matrix(cm, class_labels=None) -> str:
+    import numpy as np
+    plt.figure(figsize=(6, 5))
+    disp = ConfusionMatrixDisplay(confusion_matrix=np.array(cm), display_labels=class_labels)
+    disp.plot(cmap="Blues", colorbar=False)
+    plt.title("Confusion Matrix")
+    return save_current_figure("confusion_matrix.png")
+
+
+def plot_roc_curve(y_true, y_proba) -> str:
+    plt.figure(figsize=(6, 5))
+    try:
+        RocCurveDisplay.from_predictions(y_true, y_proba)
+    except Exception:
+        from sklearn.preprocessing import LabelEncoder
+        y_encoded = LabelEncoder().fit_transform(y_true)
+        RocCurveDisplay.from_predictions(y_encoded, y_proba)
+    plt.title("ROC Curve")
+    return save_current_figure("roc_curve.png")
 
 
 def plot_missing_values(df: pd.DataFrame) -> str | None:

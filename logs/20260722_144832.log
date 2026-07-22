@@ -1,0 +1,147 @@
+2026-07-22 14:49:14 | INFO     | emads.ui | Pipeline run started — dataset=Data.csv target_column=Loan_ID
+2026-07-22 14:49:15 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 14:49:18 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 14:49:18 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 14:49:19 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 14:49:19 | ERROR    | emads.ui | Pipeline stopped with error: Pipeline stopped at step 'hyperparameter_optimization': n_splits=2 cannot be greater than the number of members in each class.
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\supervisor\supervisor_agent.py", line 62, in node
+    update = dict(agent.execute(state) or {})
+                  ~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\hyperparameter_agent.py", line 103, in execute
+    study.optimize(objective, n_trials=N_TRIALS, timeout=TIMEOUT_SECONDS, show_progress_bar=False)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\optuna\study\study.py", line 516, in optimize
+    _optimize(
+    ~~~~~~~~~^
+        study=self,
+        ^^^^^^^^^^^
+    ...<7 lines>...
+        show_progress_bar=show_progress_bar,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\optuna\study\_optimize.py", line 68, in _optimize
+    _optimize_sequential(
+    ~~~~~~~~~~~~~~~~~~~~^
+        study,
+        ^^^^^^
+    ...<8 lines>...
+        progress_bar=progress_bar,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\optuna\study\_optimize.py", line 165, in _optimize_sequential
+    frozen_trial_id = _run_trial(study, func, catch)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\optuna\study\_optimize.py", line 263, in _run_trial
+    raise func_err
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\optuna\study\_optimize.py", line 206, in _run_trial
+    value_or_values = func(trial)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\hyperparameter_agent.py", line 99, in objective
+    scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\utils\_param_validation.py", line 218, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_validation.py", line 650, in cross_val_score
+    cv_results = cross_validate(
+        estimator=estimator,
+    ...<9 lines>...
+        error_score=error_score,
+    )
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\utils\_param_validation.py", line 218, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_validation.py", line 372, in cross_validate
+    results = parallel(
+        delayed(_fit_and_score)(
+    ...<15 lines>...
+        for train, test in indices
+    )
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\utils\parallel.py", line 91, in __call__
+    return super().__call__(iterable_with_config_and_warning_filters)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 2072, in __call__
+    return output if self.return_generator else list(output)
+                                                ~~~~^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 1682, in _get_outputs
+    yield from self._retrieve()
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 1784, in _retrieve
+    self._raise_error_fast()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 1859, in _raise_error_fast
+    error_job.get_result(self.timeout)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 758, in get_result
+    return self._return_or_raise()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 773, in _return_or_raise
+    raise self._result
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\joblib\parallel.py", line 1493, in dispatch_one_batch
+    islice = list(itertools.islice(iterator, big_batch_size))
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\utils\parallel.py", line 89, in <genexpr>
+    for delayed_func, args, kwargs in iterable
+                                      ^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_validation.py", line 389, in <genexpr>
+    for train, test in indices
+                       ^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_split.py", line 411, in split
+    for train, test in super().split(X, y, groups):
+                       ~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_split.py", line 142, in split
+    for test_index in self._iter_test_masks(X, y, groups):
+                      ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_split.py", line 845, in _iter_test_masks
+    test_folds = self._make_test_folds(X, y)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_split.py", line 807, in _make_test_folds
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: n_splits=2 cannot be greater than the number of members in each class.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\ui\streamlit_app.py", line 170, in run_pipeline_with_progress
+    for i, event in enumerate(supervisor.workflow.stream(initial_state), start=1):
+                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\langgraph\pregel\main.py", line 2967, in stream
+    for _ in runner.tick(
+             ~~~~~~~~~~~^
+        [t for t in loop.tasks.values() if not t.writes],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        schedule_task=loop.accept_push,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\langgraph\pregel\_runner.py", line 207, in tick
+    run_with_retry(
+    ~~~~~~~~~~~~~~^
+        t,
+        ^^
+    ...<10 lines>...
+        },
+        ^^
+    )
+    ^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\langgraph\pregel\_retry.py", line 617, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 684, in invoke
+    input = context.run(step.invoke, input, config, **kwargs)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 426, in invoke
+    ret = self.func(*args, **kwargs)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\supervisor\supervisor_agent.py", line 69, in node
+    raise RuntimeError(
+        f"Pipeline stopped at step '{step_name}': {exc}"
+    ) from exc
+RuntimeError: Pipeline stopped at step 'hyperparameter_optimization': n_splits=2 cannot be greater than the number of members in each class.
+During task with name 'hyperparameter_optimization' and id '61a7a264-781c-2d2b-35a1-94f5625cace8'
+2026-07-22 14:49:44 | INFO     | emads.ui | Pipeline run started — dataset=Data.csv target_column=LoanAmount
+2026-07-22 14:49:45 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 14:49:46 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 14:49:46 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 14:49:54 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 14:50:03 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-22 14:50:04 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-22 14:50:04 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-22 14:50:05 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-22 14:50:05 | INFO     | emads.ui | Pipeline run completed successfully.

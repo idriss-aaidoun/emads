@@ -44,13 +44,17 @@ class DataUnderstandingAgent(BaseAgent):
         super().__init__(name="data_understanding_agent")
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
+        self.logger.info("execute() started")
         dataset_path = state.get("dataset_path")
         user_target = state.get("target_column")
 
         if not dataset_path:
+            self.logger.error("'dataset_path' missing from state — aborting.")
             raise ValueError("'dataset_path' is missing from the state.")
 
+        self.logger.debug("Loading dataset from: %s", dataset_path)
         df = self._load_dataset(dataset_path)
+        self.logger.debug("Dataset loaded — shape: %s", df.shape)
 
         columns_profile = self._profile_columns(df)
         numerical_columns = [c for c, p in columns_profile.items() if p["is_numeric"]]
@@ -59,7 +63,8 @@ class DataUnderstandingAgent(BaseAgent):
         target_column, target_decision = self._resolve_target_column(
             df, user_target, categorical_columns, numerical_columns
         )
-        problem_type, problem_decision = self._infer_problem_type(df, target_column)
+        user_problem_type = state.get("problem_type")
+        problem_type, problem_decision = self._infer_problem_type(df, target_column, user_problem_type)
         quality_issues = self._detect_quality_issues(df, columns_profile)
 
         schema_info: Dict[str, Any] = {
@@ -71,6 +76,10 @@ class DataUnderstandingAgent(BaseAgent):
             "quality_issues": quality_issues,
         }
 
+        self.logger.info(
+            "execute() complete — rows=%s cols=%s target='%s' problem_type='%s' quality_issues=%s",
+            df.shape[0], df.shape[1], target_column, problem_type, len(quality_issues),
+        )
         return {
             "schema_info": schema_info,
             "target_column": target_column,
@@ -165,12 +174,14 @@ class DataUnderstandingAgent(BaseAgent):
             confidence=0.4,
         )
 
-    def _infer_problem_type(self, df: pd.DataFrame, target_column: str) -> tuple[str, AgentDecision]:
-        """
-        Classification if the target is non-numeric, or numeric with a small
-        number of unique values (e.g. 0/1, or a handful of classes).
-        Regression otherwise.
-        """
+    def _infer_problem_type(self, df: pd.DataFrame, target_column: str, user_problem_type: str | None = None) -> tuple[str, AgentDecision]:
+        if user_problem_type in ("classification", "regression"):
+            return user_problem_type, self.decide(
+                decision=f"Problem type: {user_problem_type}",
+                reasoning=f"Problem type was explicitly set to '{user_problem_type}'.",
+                confidence=1.0,
+            )
+
         target_series = df[target_column]
         n_unique = target_series.nunique(dropna=True)
         is_numeric = pd.api.types.is_numeric_dtype(target_series)
@@ -182,23 +193,34 @@ class DataUnderstandingAgent(BaseAgent):
                 confidence=0.95,
             )
 
+        is_float = pd.api.types.is_float_dtype(target_series)
+        val_range = float(target_series.max() - target_series.min()) if (n_unique > 1 and is_numeric) else 0
+
+        # If floating point, or range > 50, or all unique numbers, treat as regression
+        if is_float or val_range > 50 or (n_unique > 10 and n_unique == len(target_series)):
+            return "regression", self.decide(
+                decision="Problem type: regression",
+                reasoning=(
+                    f"Target column '{target_column}' is numeric with range {val_range} and {n_unique} unique values, "
+                    f"suggesting a continuous numeric target."
+                ),
+                confidence=0.85,
+            )
+
         if n_unique <= MAX_UNIQUE_FOR_CLASSIFICATION:
             return "classification", self.decide(
                 decision="Problem type: classification",
                 reasoning=(
                     f"Target column '{target_column}' is numeric but has only "
                     f"{n_unique} unique values (<= {MAX_UNIQUE_FOR_CLASSIFICATION}), "
-                    f"suggesting discrete classes rather than a continuous value."
+                    f"suggesting discrete classes."
                 ),
                 confidence=0.75,
             )
 
         return "regression", self.decide(
             decision="Problem type: regression",
-            reasoning=(
-                f"Target column '{target_column}' is numeric with {n_unique} unique "
-                f"values, suggesting a continuous target."
-            ),
+            reasoning=f"Target column '{target_column}' is numeric with {n_unique} unique values.",
             confidence=0.85,
         )
 

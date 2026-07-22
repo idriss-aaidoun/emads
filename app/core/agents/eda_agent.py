@@ -32,6 +32,7 @@ class EDAAgent(BaseAgent):
         self.llm = llm_service if llm_service else LLMService()
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
+        self.logger.info("execute() started")
         dataset_path = state.get("dataset_path")
         target_column = state.get("target_column")
         problem_type = state.get("problem_type") or "classification"
@@ -39,8 +40,10 @@ class EDAAgent(BaseAgent):
         numerical_columns: List[str] = schema_info.get("numerical_columns", [])
 
         if not dataset_path:
+            self.logger.error("'dataset_path' missing from state — aborting.")
             raise ValueError("'dataset_path' is missing from the state.")
 
+        self.logger.debug("Reading dataset from: %s", dataset_path)
         df = pd.read_csv(dataset_path)
 
         generated_plots: List[str] = []
@@ -80,11 +83,25 @@ class EDAAgent(BaseAgent):
             confidence=0.7,
         )
 
+        self.logger.info(
+            "Calling LLM for EDA summary (model=%s)",
+            getattr(self.llm, 'model_name', 'unknown'),
+        )
         eda_summary = self.llm.generate_eda_summary(
             {**schema_info, **eda_stats, "target_column": target_column},
             dataset_path,
+            fallback_message=self._build_fallback_eda_summary(schema_info, target_column, outliers),
+        )
+        self.logger.info(
+            "LLM EDA summary received (chars=%s, starts_with=%r)",
+            len(eda_summary) if eda_summary else 0,
+            (eda_summary or "")[:80],
         )
 
+        self.logger.info(
+            "execute() complete — plots=%s outlier_cols=%s",
+            len(generated_plots), len(outliers),
+        )
         return {
             "eda_stats": eda_stats,
             "eda_summary": eda_summary,
@@ -95,3 +112,16 @@ class EDAAgent(BaseAgent):
                 f"detected outliers in {len(outliers)} column(s)."
             )],
         }
+
+    def _build_fallback_eda_summary(self, schema_info: dict, target_column: str | None, outliers: dict) -> str:
+        num_rows = schema_info.get("num_rows", "N/A")
+        num_cols = schema_info.get("num_cols", "N/A")
+        target_str = f"`{target_column}`" if target_column else "N/A"
+        num_outliers = len(outliers)
+        
+        return (
+            f"* **Dataset Dimensions**: Analyzed {num_rows} rows and {num_cols} columns.\n"
+            f"* **Target Variable**: Designated target variable is {target_str}.\n"
+            f"* **Data Quality & Outliers**: Flagged {num_outliers} numerical column(s) containing outliers via the 1.5*IQR rule.\n"
+            f"* **Feature Profiling**: Preprocessing recommended to handle categorical encodings and scale numerical distributions."
+        )
