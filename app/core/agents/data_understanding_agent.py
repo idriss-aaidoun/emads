@@ -65,6 +65,7 @@ class DataUnderstandingAgent(BaseAgent):
         )
         user_problem_type = state.get("problem_type")
         problem_type, problem_decision = self._infer_problem_type(df, target_column, user_problem_type)
+        self._validate_target_for_modeling(df, target_column, problem_type)
         quality_issues = self._detect_quality_issues(df, columns_profile)
 
         schema_info: Dict[str, Any] = {
@@ -223,6 +224,25 @@ class DataUnderstandingAgent(BaseAgent):
             reasoning=f"Target column '{target_column}' is numeric with {n_unique} unique values.",
             confidence=0.85,
         )
+
+    def _validate_target_for_modeling(
+        self, df: pd.DataFrame, target_column: str, problem_type: str
+    ) -> None:
+        """Rejects class distributions that cannot support holdout and CV.
+
+        Three examples per class leave one for the untouched test set and at
+        least two for stratified cross-validation on the training data.
+        """
+        if problem_type != "classification":
+            return
+        counts = df[target_column].dropna().value_counts()
+        if len(counts) < 2:
+            raise ValueError("Classification requires at least two target classes.")
+        if int(counts.min()) < 3:
+            raise ValueError(
+                "Classification requires at least 3 rows in every target class "
+                "for a holdout set and stratified cross-validation."
+            )
 
     def _detect_quality_issues(
         self, df: pd.DataFrame, columns_profile: Dict[str, Dict[str, Any]]

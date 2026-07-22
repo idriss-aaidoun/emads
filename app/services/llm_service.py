@@ -199,7 +199,7 @@ class LLMService:
         # Build a readable column profile for the LLM
         col_lines = []
         for col_name, meta in columns.items():
-            missing  = meta.get("missing_values", 0)
+            missing  = meta.get("missing_count", 0)
             dtype    = meta.get("dtype", "unknown")
             numeric  = meta.get("is_numeric", False)
             col_lines.append(
@@ -211,7 +211,7 @@ class LLMService:
             f"Dataset file: {dataset_path}\n"
             f"Shape: {num_rows} rows × {num_cols} columns\n"
             f"Target column: {schema_info.get('target_column', 'unknown')}\n"
-            f"Total missing values across all columns: {schema_info.get('missing_totals', 'unknown')}\n\n"
+            f"Total missing values across all columns: {schema_info.get('total_missing_values', 'unknown')}\n\n"
             f"Column Profile:\n{column_profile}\n\n"
         )
 

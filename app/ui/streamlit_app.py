@@ -19,10 +19,10 @@ import pandas as pd
 from app.core.state.emads_state import create_initial_state
 from app.core.supervisor.supervisor_agent import SupervisorAgent
 from app.utils.file_utils import ensure_dir
-from app.utils.logger import get_logger, get_log_file_path, reset_session
+import app.utils.logger as logger_utils
 
 # Pipeline-level logger for the UI layer
-_ui_logger = get_logger("emads.ui")
+_ui_logger = logger_utils.get_logger("emads.ui")
 
 st.set_page_config(page_title="EMADS Dashboard", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
@@ -132,7 +132,7 @@ def render_sidebar():
 
     # ---- Log file download button ----------------------------------------
     st.sidebar.markdown("---")
-    log_file = get_log_file_path()
+    log_file = logger_utils.get_log_file_path()
     if os.path.exists(log_file):
         with open(log_file, "rb") as _lf:
             st.sidebar.download_button(
@@ -154,8 +154,10 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str) -> dict:
     instead of a single blocking spinner."""
     # Reset the logger cache so ALL agents (eda, explainability, etc.) get a
     # fresh handler pointing to THIS run's log file — not the previous one.
-    reset_session()
-    _ui_logger = get_logger("emads.ui")  # re-acquire after reset
+    reset_session_fn = getattr(logger_utils, "reset_session", None)
+    if callable(reset_session_fn):
+        reset_session_fn()
+    _ui_logger = logger_utils.get_logger("emads.ui")  # re-acquire after reset
 
     _ui_logger.info(
         "Pipeline run started — dataset=%s target_column=%s",
@@ -174,9 +176,38 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str) -> dict:
     try:
         for i, event in enumerate(supervisor.workflow.stream(initial_state), start=1):
             step_name = list(event.keys())[0]
-            final_state.update(event[step_name])
+            final_state = _merge_stream_update(final_state, event[step_name])
             label = STEP_LABELS.get(step_name, step_name)
             _ui_logger.info("Pipeline step completed — step=%s (%s/%s)", step_name, i, total_steps)
+
+            if step_name == "eda":
+                eda_summary = final_state.get("eda_summary") or ""
+                _ui_logger.info(
+                    "LLM payload — eda_summary chars=%s starts_with=%r",
+                    len(eda_summary),
+                    eda_summary[:80],
+                )
+            elif step_name == "model_selection":
+                model_summary = final_state.get("model_selection_summary") or ""
+                _ui_logger.info(
+                    "LLM payload — model_selection_summary chars=%s starts_with=%r",
+                    len(model_summary),
+                    model_summary[:80],
+                )
+            elif step_name == "explainability":
+                explain_summary = final_state.get("explainability_summary") or ""
+                _ui_logger.info(
+                    "LLM payload — explainability_summary chars=%s starts_with=%r",
+                    len(explain_summary),
+                    explain_summary[:80],
+                )
+            elif step_name == "reporting":
+                report_path = final_state.get("report_path")
+                _ui_logger.info(
+                    "Reporting output — report_path=%s",
+                    report_path,
+                )
+
             status_box.info(f"{label}...")
             progress_bar.progress(min(i / total_steps, 1.0), text=label)
     except Exception as exc:
@@ -189,6 +220,17 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str) -> dict:
     progress_bar.progress(1.0, text="Done!")
     status_box.success("🎉 Pipeline completed successfully.")
     return final_state
+
+
+def _merge_stream_update(current_state: dict, update: dict) -> dict:
+    """Applies streamed LangGraph updates while preserving accumulator fields."""
+    merged = dict(current_state)
+    for key, value in update.items():
+        if key in {"agent_decisions", "logs", "errors"}:
+            merged[key] = [*(merged.get(key) or []), *(value or [])]
+        else:
+            merged[key] = value
+    return merged
 
 
 def render_overview_tab(state: dict) -> None:
@@ -256,6 +298,11 @@ def render_model_tab(state: dict) -> None:
         st.bar_chart(df.set_index("Model")["Mean CV Score"])
 
     st.success(f"🏆 Selected model: **{state.get('selected_model_name', 'N/A')}**")
+
+    summary = state.get("model_selection_summary")
+    if summary:
+        section_title("Why this model was selected")
+        st.markdown(summary)
 
     hyperparams = state.get("best_hyperparameters")
     if hyperparams:

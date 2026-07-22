@@ -91,6 +91,7 @@ class ExplainabilityAgent(BaseAgent):
             "Calling LLM for explainability summary (model=%s)",
             getattr(self.llm, 'model_name', 'unknown'),
         )
+        fallback_summary = self._build_fallback_summary(model_name, feature_importance, shap_top_features)
         explainability_summary = self.llm.generate_summary(
             system_prompt=(
                 "You are a senior data scientist explaining a trained model's behavior "
@@ -99,8 +100,11 @@ class ExplainabilityAgent(BaseAgent):
                 "caveats about trusting these explanations. No code, no jargon."
             ),
             user_prompt=self._build_llm_prompt(model_name, feature_importance, shap_top_features),
-            fallback_message=self._build_fallback_summary(model_name, feature_importance, shap_top_features),
+            fallback_message=fallback_summary,
         )
+        if not (explainability_summary or "").strip():
+            self.logger.warning("LLM returned empty explainability summary; using deterministic fallback text.")
+            explainability_summary = fallback_summary
         self.logger.info(
             "LLM explainability response received (chars=%s, starts_with=%r)",
             len(explainability_summary) if explainability_summary else 0,

@@ -87,11 +87,15 @@ class EDAAgent(BaseAgent):
             "Calling LLM for EDA summary (model=%s)",
             getattr(self.llm, 'model_name', 'unknown'),
         )
+        fallback_summary = self._build_fallback_eda_summary(schema_info, target_column, outliers)
         eda_summary = self.llm.generate_eda_summary(
             {**schema_info, **eda_stats, "target_column": target_column},
             dataset_path,
-            fallback_message=self._build_fallback_eda_summary(schema_info, target_column, outliers),
+            fallback_message=fallback_summary,
         )
+        if not (eda_summary or "").strip():
+            self.logger.warning("LLM returned empty EDA summary; using deterministic fallback text.")
+            eda_summary = fallback_summary
         self.logger.info(
             "LLM EDA summary received (chars=%s, starts_with=%r)",
             len(eda_summary) if eda_summary else 0,

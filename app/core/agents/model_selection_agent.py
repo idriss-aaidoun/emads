@@ -12,8 +12,6 @@ gracefully to scikit-learn-only candidates otherwise, so the pipeline never
 breaks because of an optional dependency.
 """
 
-import os
-import pickle
 import numpy as np
 import pandas as pd
 from typing import Any, Dict, List
@@ -25,8 +23,8 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState
+from app.services.llm_service import LLMService
 
-MODELS_DIR = os.path.join("data", "outputs", "models")
 CV_FOLDS = 5
 RANDOM_STATE = 42
 
@@ -52,6 +50,7 @@ class ModelSelectionAgent(BaseAgent):
 
     def __init__(self) -> None:
         super().__init__(name="model_selection_agent")
+        self.llm = LLMService()
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
         self.logger.info("execute() started")
@@ -115,14 +114,6 @@ class ModelSelectionAgent(BaseAgent):
         best_model_name = best_result["model_name"]
         best_model = candidates[best_model_name]
 
-        # Fit the winning model on the full training split (final trained artifact).
-        best_model.fit(X_train, y_train)
-
-        os.makedirs(MODELS_DIR, exist_ok=True)
-        model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
-        with open(model_path, "wb") as f:
-            pickle.dump(best_model, f)
-
         selection_decision = self.decide(
             decision=f"Selected '{best_model_name}' as the final model",
             reasoning=self._build_reasoning(best_result, results, scoring),
@@ -130,13 +121,36 @@ class ModelSelectionAgent(BaseAgent):
         )
 
         self.logger.info(
-            "execute() complete — selected_model=%s score=%.4f model_saved=%s",
-            best_model_name, best_result['mean_score'], model_path,
+            "Calling LLM for model selection summary (model=%s)",
+            getattr(self.llm, "model_name", "unknown"),
+        )
+        fallback_summary = self._build_fallback_summary(best_model_name, best_result, results, scoring)
+        model_selection_summary = self.llm.generate_summary(
+            system_prompt=(
+                "You are a senior machine learning engineer. Explain in 4-6 concise bullet points "
+                "why a particular model was selected over the alternatives, using the cross-validation "
+                "results and the confidence in the choice. Be clear and non-technical."
+            ),
+            user_prompt=self._build_llm_prompt(best_model_name, best_result, results, scoring),
+            fallback_message=fallback_summary,
+        )
+        if not (model_selection_summary or "").strip():
+            self.logger.warning("LLM returned empty model selection summary; using deterministic fallback text.")
+            model_selection_summary = fallback_summary
+        self.logger.info(
+            "LLM model selection summary received (chars=%s, starts_with=%r)",
+            len(model_selection_summary) if model_selection_summary else 0,
+            (model_selection_summary or "")[:80],
+        )
+
+        self.logger.info(
+            "Model selection complete: selected_model=%s score=%.4f",
+            best_model_name, best_result["mean_score"],
         )
         return {
             "candidate_models_results": results,
             "selected_model_name": best_model_name,
-            "model_path": model_path,
+            "model_selection_summary": model_selection_summary,
             "agent_decisions": [selection_decision],
             "logs": [self.log(
                 f"Compared {len(candidates)} model(s) via {CV_FOLDS}-fold CV. "
@@ -192,6 +206,32 @@ class ModelSelectionAgent(BaseAgent):
             f"'{best['model_name']}' achieved the best mean {metric_label} "
             f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) across {CV_FOLDS}-fold "
             f"cross-validation on the training set. Other candidates scored: {comparison}."
+        )
+
+    def _build_llm_prompt(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
+        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        top_rows = []
+        for result in sorted(all_results, key=lambda r: r["mean_score"], reverse=True)[:5]:
+            top_rows.append(
+                f"- {result['model_name']}: mean {metric_label}={result['mean_score']:.4f}, std={result['std_score']:.4f}"
+            )
+        return (
+            f"Best model: {best_model_name}\n"
+            f"Winning score: {best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}\n"
+            f"Metric: {metric_label}\n\n"
+            f"Candidate comparison:\n{chr(10).join(top_rows)}\n\n"
+            "Explain why the selected model is preferable and mention any caveats about close competition."
+        )
+
+    def _build_fallback_summary(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
+        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        others = [r for r in all_results if r["model_name"] != best_model_name]
+        comparison = ", ".join(f"{r['model_name']}={r['mean_score']:.4f}" for r in others[:4]) or "no alternatives recorded"
+        return (
+            f"* **Selected Model**: `{best_model_name}` was chosen because it achieved the best mean {metric_label} "
+            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) on cross-validation.\n"
+            f"* **Comparison**: Competing models scored: {comparison}.\n"
+            "* **Caution**: If the margin is small, the choice should be validated further on fresh data before deployment."
         )
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:

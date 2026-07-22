@@ -1,0 +1,67 @@
+2026-07-22 16:05:02 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:05:04 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:05:04 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:05:05 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:05:05 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:05:06 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:05:06 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:05:08 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:05:08 | INFO     | emads.data_understanding_agent | execute() started
+2026-07-22 16:05:08 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpv21icean\dataset.csv
+2026-07-22 16:05:08 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (8, 3)
+2026-07-22 16:05:08 | INFO     | emads.data_understanding_agent | execute() complete — rows=8 cols=3 target='label' problem_type='classification' quality_issues=0
+2026-07-22 16:05:08 | INFO     | emads.eda_agent | execute() started
+2026-07-22 16:05:08 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpv21icean\dataset.csv
+2026-07-22 16:05:16 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-07-22 16:05:16 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=894
+2026-07-22 16:05:18 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1448
+2026-07-22 16:05:18 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1448, starts_with="Here's a concise summary of the dataset based on the provided statistics:\n\n* **D")
+2026-07-22 16:05:18 | INFO     | emads.eda_agent | execute() complete — plots=4 outlier_cols=0
+2026-07-22 16:05:18 | INFO     | emads.preprocessing_agent | execute() started
+2026-07-22 16:05:18 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpv21icean\dataset.csv
+2026-07-22 16:05:18 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(8, 3) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-07-22 16:05:18 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-07-22 16:05:18 | INFO     | emads.model_selection_agent | execute() started
+2026-07-22 16:05:18 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-07-22 16:05:52 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.1667±0.2357 metric=accuracy
+2026-07-22 16:06:22 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=0.1667±0.2357 metric=accuracy
+2026-07-22 16:06:57 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.1667±0.2357 metric=accuracy
+2026-07-22 16:06:57 | WARNING  | emads.model_selection_agent | CV failed for model=XGBoost error=
+All the 3 fits failed.
+It is very likely that your model is misconfigured.
+You can try to debug the error by setting error_score='raise'.
+
+Below are more details about the failures:
+--------------------------------------------------------------------------------
+3 fits failed with the following error:
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\sklearn\model_selection\_validation.py", line 856, in _fit_and_score
+    estimator.fit(X_train, y_train, **fit_params)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\xgboost\core.py", line 553, in inner_f
+    return func(**kwargs)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\xgboost\sklearn.py", line 1762, in fit
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: Invalid classes inferred from unique values of `y`.  Expected: [0 1], got ['no' 'yes']
+
+2026-07-22 16:07:06 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=0.5000±0.0000 metric=accuracy
+2026-07-22 16:07:06 | INFO     | emads.model_selection_agent | Calling LLM for model selection summary (model=llama-3.1-8b-instant)
+2026-07-22 16:07:06 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=236 user_chars=426
+2026-07-22 16:07:07 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1564
+2026-07-22 16:07:07 | INFO     | emads.model_selection_agent | LLM model selection summary received (chars=1564, starts_with='Here are 4-6 concise bullet points explaining why LightGBM was selected over the')
+2026-07-22 16:07:07 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LightGBM score=0.5000
+2026-07-22 16:08:20 | INFO     | emads.evaluation_agent | execute() started
+2026-07-22 16:08:27 | INFO     | emads.evaluation_agent | Evaluation metrics: {'accuracy': 0.5, 'precision': 0.25, 'recall': 0.5, 'f1_score': 0.3333333333333333, 'roc_auc': 0.5, 'confusion_matrix': [[1, 0], [1, 0]], 'cv_mean_accuracy': 0.5, 'cv_std_accuracy': 0.0}
+2026-07-22 16:08:27 | INFO     | emads.explainability_agent | execute() started
+2026-07-22 16:08:27 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-07-22 16:08:27 | INFO     | emads.explainability_agent | Computing SHAP values (model=LightGBM sample_size=100)
+2026-07-22 16:08:28 | INFO     | emads.explainability_agent | SHAP computation successful — top_features=['feature_1', 'feature_2']
+2026-07-22 16:08:28 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-07-22 16:08:28 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=276 user_chars=194
+2026-07-22 16:08:29 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1873
+2026-07-22 16:08:29 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1873, starts_with="Here's a plain English explanation of the model's behavior:\n\n* **The model is no")
+2026-07-22 16:08:29 | INFO     | emads.explainability_agent | execute() complete — top_feature=feature_1 shap_plots=1
+2026-07-22 16:08:29 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=196 user_chars=272
+2026-07-22 16:08:29 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=430

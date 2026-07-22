@@ -71,9 +71,18 @@ class HyperparameterAgent(BaseAgent):
 
         # LinearRegression has essentially no meaningful hyperparameters to tune.
         if model_name == "LinearRegression":
+            df = pd.read_csv(data_path)
+            final_model = LinearRegression().fit(
+                df.drop(columns=[target_column]), df[target_column]
+            )
+            os.makedirs(MODELS_DIR, exist_ok=True)
+            model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
+            with open(model_path, "wb") as f:
+                pickle.dump(final_model, f)
             return {
                 "best_hyperparameters": {},
                 "optimization_summary": {"skipped": True, "reason": "LinearRegression has no tunable hyperparameters."},
+                "model_path": model_path,
                 "agent_decisions": [self.decide(
                     decision="Skipped hyperparameter optimization",
                     reasoning="'LinearRegression' has no hyperparameters worth tuning via Optuna.",

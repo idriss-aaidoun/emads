@@ -54,6 +54,7 @@ class EMADSState(TypedDict, total=False):
     candidate_models_results: Optional[List[Dict[str, Any]]]
     selected_model_name: Optional[str]
     model_path: Optional[str]
+    model_selection_summary: Optional[str]
 
     best_hyperparameters: Optional[Dict[str, Any]]
     optimization_summary: Optional[Dict[str, Any]]

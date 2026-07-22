@@ -1,0 +1,2 @@
+2026-07-22 15:24:15 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 15:24:15 | INFO     | emads.llm | Groq client initialized successfully.

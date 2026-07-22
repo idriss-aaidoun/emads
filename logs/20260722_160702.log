@@ -1,0 +1,21 @@
+2026-07-22 16:07:49 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:07:55 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:07:55 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:07:58 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:07:58 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:08:00 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:08:00 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-07-22 16:08:02 | INFO     | emads.llm | Groq client initialized successfully.
+2026-07-22 16:08:02 | INFO     | emads.data_understanding_agent | execute() started
+2026-07-22 16:08:02 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpt14x4mvw\dataset.csv
+2026-07-22 16:08:02 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (2, 2)
+2026-07-22 16:08:02 | INFO     | emads.data_understanding_agent | execute() complete — rows=2 cols=2 target='target' problem_type='regression' quality_issues=2
+2026-07-22 16:08:02 | INFO     | emads.eda_agent | execute() started
+2026-07-22 16:08:02 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpt14x4mvw\dataset.csv
+2026-07-22 16:08:10 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-07-22 16:08:10 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=586
+2026-07-22 16:08:12 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1216
+2026-07-22 16:08:12 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1216, starts_with='**Dataset Summary**\n\n* **Dataset Shape:** The dataset contains 2 rows and 2 colu')
+2026-07-22 16:08:12 | INFO     | emads.eda_agent | execute() complete — plots=5 outlier_cols=0
+2026-07-22 16:08:12 | INFO     | emads.preprocessing_agent | execute() started
+2026-07-22 16:08:12 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpt14x4mvw\dataset.csv

@@ -145,3 +145,59 @@ During task with name 'hyperparameter_optimization' and id '61a7a264-781c-2d2b-3
 2026-07-22 14:50:04 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
 2026-07-22 14:50:05 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
 2026-07-22 14:50:05 | INFO     | emads.ui | Pipeline run completed successfully.
+2026-07-22 15:14:06 | INFO     | emads.ui | Pipeline run started — dataset=prix_maisons2 - prix_maisons2.csv target_column=price
+2026-07-22 15:14:06 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 15:14:07 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 15:14:07 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 15:14:17 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 15:14:17 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-22 15:14:18 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-22 15:14:18 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-22 15:14:18 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-22 15:14:18 | INFO     | emads.ui | Pipeline run completed successfully.
+2026-07-22 15:29:10 | INFO     | emads.ui | Pipeline run started — dataset=students.csv target_column=activite_parascolaire
+2026-07-22 15:29:11 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 15:29:11 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 15:29:11 | INFO     | emads.ui | LLM payload — eda_summary chars=0 starts_with=''
+2026-07-22 15:29:11 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 15:29:20 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 15:29:20 | INFO     | emads.ui | LLM payload — model_selection_summary chars=0 starts_with=''
+2026-07-22 15:29:21 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-22 15:29:21 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-22 15:29:21 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-22 15:29:21 | INFO     | emads.ui | LLM payload — explainability_summary chars=0 starts_with=''
+2026-07-22 15:29:21 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-22 15:29:21 | INFO     | emads.ui | Reporting output — report_path=reports\EMADS_Report_20260722_152910.pdf
+2026-07-22 15:29:21 | INFO     | emads.ui | Pipeline run completed successfully.
+2026-07-22 15:34:52 | INFO     | emads.ui | Pipeline run started — dataset=prix_maisons2 - prix_maisons2.csv target_column=price
+2026-07-22 15:34:53 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 15:34:54 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 15:34:54 | INFO     | emads.ui | LLM payload — eda_summary chars=0 starts_with=''
+2026-07-22 15:34:54 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 15:35:14 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 15:35:14 | INFO     | emads.ui | LLM payload — model_selection_summary chars=0 starts_with=''
+2026-07-22 15:35:15 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-22 15:35:15 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-22 15:35:15 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-22 15:35:15 | INFO     | emads.ui | LLM payload — explainability_summary chars=0 starts_with=''
+2026-07-22 15:35:16 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-22 15:35:16 | INFO     | emads.ui | Reporting output — report_path=reports\EMADS_Report_20260722_153452.pdf
+2026-07-22 15:35:16 | INFO     | emads.ui | Pipeline run completed successfully.
+2026-07-22 15:36:41 | INFO     | emads.ui | Pipeline run started — dataset=Social_Network_Ads.csv target_column=Purchased
+2026-07-22 15:36:42 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 15:36:43 | INFO     | emads.ui | Pipeline run started — dataset=Social_Network_Ads.csv target_column=Purchased
+2026-07-22 15:36:45 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-22 15:36:45 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 15:36:45 | INFO     | emads.ui | LLM payload — eda_summary chars=0 starts_with=''
+2026-07-22 15:36:47 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-22 15:36:47 | INFO     | emads.ui | LLM payload — eda_summary chars=0 starts_with=''
+2026-07-22 15:36:47 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-22 15:36:53 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-22 15:36:53 | INFO     | emads.ui | LLM payload — model_selection_summary chars=0 starts_with=''
+2026-07-22 15:37:11 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-22 15:37:14 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-22 15:37:15 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-22 15:37:15 | INFO     | emads.ui | LLM payload — explainability_summary chars=0 starts_with=''
+2026-07-22 15:37:16 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-22 15:37:16 | INFO     | emads.ui | Reporting output — report_path=reports\EMADS_Report_20260722_153643.pdf
+2026-07-22 15:37:16 | INFO     | emads.ui | Pipeline run completed successfully.

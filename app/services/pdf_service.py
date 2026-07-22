@@ -9,6 +9,7 @@ what the Reporting Agent gives it.
 """
 
 import os
+from xml.sax.saxutils import escape
 from typing import Any, Dict, List
 
 from reportlab.lib.pagesizes import A4
@@ -78,8 +79,7 @@ class PDFService:
         ]
 
     def _build_section(self, title: str, text: str) -> List[Any]:
-        text = text or "No content available."
-        return [Paragraph(title, self.styles["SectionTitle"]), Paragraph(text, self.styles["Body"])]
+        return [Paragraph(title, self.styles["SectionTitle"]), Paragraph(self._safe_text(text), self.styles["Body"])]
 
     def _build_eda_section(self, data: Dict[str, Any]) -> List[Any]:
         elements = self._build_section("Exploratory Data Analysis", data.get("eda_summary", ""))
@@ -117,6 +117,11 @@ class PDFService:
         if hyperparams:
             elements.append(Paragraph(f"<b>Best hyperparameters:</b> {hyperparams}", self.styles["Body"]))
 
+        model_selection_summary = data.get("model_selection_summary")
+        if model_selection_summary:
+            elements.append(Paragraph("Model Selection Rationale", self.styles["SectionTitle"]))
+            elements.append(Paragraph(self._safe_text(model_selection_summary), self.styles["Body"]))
+
         return elements
 
     def _build_evaluation_section(self, data: Dict[str, Any]) -> List[Any]:
@@ -149,7 +154,7 @@ class PDFService:
         for d in decisions:
             confidence = f" (confidence: {d.confidence:.0%})" if d.confidence is not None else ""
             elements.append(Paragraph(
-                f"<b>[{d.agent_name}]</b> {d.decision}{confidence}<br/><i>{d.reasoning}</i>",
+                f"<b>[{escape(d.agent_name)}]</b> {escape(d.decision)}{confidence}<br/><i>{escape(d.reasoning)}</i>",
                 self.styles["Body"],
             ))
         return elements
@@ -178,3 +183,8 @@ class PDFService:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         return table
+
+    @staticmethod
+    def _safe_text(text: Any) -> str:
+        """Escapes external text before ReportLab parses its HTML-like markup."""
+        return escape(str(text or "No content available.")).replace("\n", "<br/>")

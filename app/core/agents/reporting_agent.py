@@ -54,6 +54,7 @@ class ReportingAgent(BaseAgent):
             "generated_plots": state.get("generated_plots") or [],
             "preprocessing_report": state.get("preprocessing_report"),
             "selected_model_name": state.get("selected_model_name"),
+            "model_selection_summary": state.get("model_selection_summary"),
             "candidate_models_results": state.get("candidate_models_results"),
             "best_hyperparameters": state.get("best_hyperparameters"),
             "metrics": metrics,
@@ -71,6 +72,11 @@ class ReportingAgent(BaseAgent):
 
         return {
             "report_path": report_file_path,
+            "agent_decisions": [self.decide(
+                decision="Generated final EMADS report",
+                reasoning="The report consolidates pipeline outputs, metrics, explanations, and decisions.",
+                confidence=1.0,
+            )],
             "logs": [self.log(f"Report generated at '{report_file_path}'.")],
         }
 
