@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 import streamlit as st
 import pandas as pd
 
-from app.core.state.emads_state import create_initial_state
+from app.core.state.emads_state import create_initial_state, UNSUPERVISED_PROBLEM_TYPES
 from app.core.supervisor.supervisor_agent import SupervisorAgent
 from app.utils.file_utils import ensure_dir
 import app.utils.logger as logger_utils
@@ -104,11 +104,20 @@ def section_title(text: str) -> None:
     st.markdown(f'<div class="section-title">{text}</div>', unsafe_allow_html=True)
 
 
+PROBLEM_TYPE_OPTIONS = {
+    "Auto-detect": None,
+    "Classification": "classification",
+    "Regression": "regression",
+    "Clustering": "clustering",
+    "Anomaly Detection": "anomaly_detection",
+}
+
+
 def render_sidebar():
     st.sidebar.header("📁 Dataset")
     uploaded_file = st.sidebar.file_uploader("Upload a CSV dataset", type=["csv"])
 
-    local_path, target_column = None, None
+    local_path, target_column, problem_type = None, None, None
     if uploaded_file is not None:
         upload_dir = ensure_dir("uploads")
         local_path = os.path.join(upload_dir, uploaded_file.name)
@@ -119,13 +128,22 @@ def render_sidebar():
             preview_df = pd.read_csv(local_path, nrows=5)
             st.sidebar.markdown("**Preview**")
             st.sidebar.dataframe(preview_df.head(3), use_container_width=True)
-            target_column = st.sidebar.selectbox("🎯 Target column", options=list(preview_df.columns))
+
+            problem_type_label = st.sidebar.selectbox("🧩 Problem type", options=list(PROBLEM_TYPE_OPTIONS.keys()))
+            problem_type = PROBLEM_TYPE_OPTIONS[problem_type_label]
+
+            if problem_type in UNSUPERVISED_PROBLEM_TYPES:
+                st.sidebar.caption("Unsupervised problem type — no target column needed; every column is used as a feature.")
+            else:
+                target_column = st.sidebar.selectbox("🎯 Target column", options=list(preview_df.columns))
         except Exception as e:
             st.sidebar.error(f"Could not read file: {e}")
 
     st.sidebar.markdown("---")
+    is_unsupervised_choice = problem_type in UNSUPERVISED_PROBLEM_TYPES
+    run_ready = uploaded_file is not None and (target_column or is_unsupervised_choice)
     run_clicked = st.sidebar.button(
-        "⚡ Run EMADS Pipeline", use_container_width=True, type="primary", disabled=uploaded_file is None
+        "⚡ Run EMADS Pipeline", use_container_width=True, type="primary", disabled=not run_ready
     )
     if uploaded_file is None:
         st.sidebar.info("Upload a CSV to get started.")
@@ -146,10 +164,10 @@ def render_sidebar():
 
     st.sidebar.markdown("---")
     st.sidebar.caption("EMADS v2.0 • 8 specialized agents • Explainable by design")
-    return local_path, target_column, run_clicked
+    return local_path, target_column, problem_type, run_clicked
 
 
-def run_pipeline_with_progress(dataset_path: str, target_column: str) -> dict:
+def run_pipeline_with_progress(dataset_path: str, target_column: str | None, problem_type: str | None) -> dict:
     """Streams the LangGraph execution so the UI can show live, per-agent progress
     instead of a single blocking spinner."""
     # Reset the logger cache so ALL agents (eda, explainability, etc.) get a
@@ -164,7 +182,10 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str) -> dict:
         os.path.basename(dataset_path), target_column,
     )
     initial_state = create_initial_state(dataset_path, dataset_name=os.path.basename(dataset_path))
-    initial_state["target_column"] = target_column
+    if target_column:
+        initial_state["target_column"] = target_column
+    if problem_type:
+        initial_state["problem_type"] = problem_type
 
     supervisor = SupervisorAgent()
     progress_bar = st.progress(0, text="Starting pipeline...")
@@ -238,7 +259,7 @@ def render_overview_tab(state: dict) -> None:
     c1, c2, c3, c4 = st.columns(4)
     metric_card(c1, "Rows", schema.get("num_rows", "N/A"))
     metric_card(c2, "Columns", schema.get("num_cols", "N/A"))
-    metric_card(c3, "Target", state.get("target_column", "N/A"))
+    metric_card(c3, "Target", state.get("target_column") or "N/A")
     metric_card(c4, "Problem Type", (state.get("problem_type") or "N/A").title())
 
     issues = schema.get("quality_issues", [])
@@ -333,6 +354,20 @@ def render_evaluation_tab(state: dict) -> None:
             f"Cross-validation: {metrics.get('cv_mean_accuracy', 0):.3f} "
             f"± {metrics.get('cv_std_accuracy', 0):.3f}"
         )
+    elif "silhouette_score" in metrics:
+        c1, c2, c3 = st.columns(3)
+        metric_card(c1, "Silhouette Score", f"{metrics.get('silhouette_score', 0):.3f}")
+        db = metrics.get("davies_bouldin_score")
+        metric_card(c2, "Davies-Bouldin", f"{db:.3f}" if db is not None else "N/A")
+        ch = metrics.get("calinski_harabasz_score")
+        metric_card(c3, "Calinski-Harabasz", f"{ch:.1f}" if ch is not None else "N/A")
+        if "n_clusters_found" in metrics:
+            st.caption(f"Clusters found: {metrics['n_clusters_found']}")
+        if "anomaly_rate" in metrics:
+            st.caption(
+                f"Anomalies detected: {metrics.get('n_anomalies_detected', 0)} "
+                f"({metrics['anomaly_rate']:.1%} of rows)"
+            )
     else:
         c1, c2, c3, c4 = st.columns(4)
         metric_card(c1, "MAE", f"{metrics.get('mae', 0):.3f}")
@@ -423,10 +458,11 @@ def render_report_tab(state: dict) -> None:
 
 def main() -> None:
     header()
-    local_path, target_column, run_clicked = render_sidebar()
+    local_path, target_column, problem_type, run_clicked = render_sidebar()
+    is_unsupervised_choice = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
-    if run_clicked and local_path and target_column:
-        final_state = run_pipeline_with_progress(local_path, target_column)
+    if run_clicked and local_path and (target_column or is_unsupervised_choice):
+        final_state = run_pipeline_with_progress(local_path, target_column, problem_type)
         if final_state:
             st.session_state["final_state"] = final_state
 

@@ -18,10 +18,13 @@ from optuna.samplers import TPESampler
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, IsolationForest
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.metrics import silhouette_score
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState
+from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 
 MODELS_DIR = os.path.join("data", "outputs", "models")
 RANDOM_STATE = 42
@@ -62,11 +65,13 @@ class HyperparameterAgent(BaseAgent):
         problem_type = state.get("problem_type")
         model_name = state.get("selected_model_name")
         baseline_score = self._get_baseline_score(state, model_name)
+        is_unsupervised = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
-        if not all([data_path, target_column, problem_type, model_name]):
+        if not all([data_path, problem_type, model_name]) or (not is_unsupervised and not target_column):
             raise ValueError(
                 "Missing required state inputs: 'preprocessed_data_path', "
-                "'target_column', 'problem_type' or 'selected_model_name'."
+                "'problem_type', 'selected_model_name', or 'target_column' "
+                "(required for supervised problem types)."
             )
 
         # LinearRegression has essentially no meaningful hyperparameters to tune.
@@ -92,21 +97,38 @@ class HyperparameterAgent(BaseAgent):
             }
 
         df = pd.read_csv(data_path)
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
 
-        stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-        X_train, _, y_train, _ = train_test_split(
-            X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
-        )
+        if is_unsupervised:
+            # No target, no train/test split: mirrors ModelSelectionAgent's
+            # _score_candidates_unsupervised, which fits on the full
+            # preprocessed dataset for the same reason (DBSCAN/LocalOutlier
+            # Factor have no reusable out-of-sample .predict(), so there is
+            # no k-fold-CV-idiomatic way to hold out a test split here).
+            X_train = df.copy()
+            scoring = "silhouette"
 
-        cv = self._build_cv_splitter(problem_type, y_train)
-        scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
+            def objective(trial: optuna.Trial) -> float:
+                model = self._build_model_from_trial(model_name, problem_type, trial)
+                labels = model.fit_predict(X_train)
+                if len(set(labels)) < 2:
+                    return -1.0
+                return float(silhouette_score(X_train, labels))
+        else:
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
 
-        def objective(trial: optuna.Trial) -> float:
-            model = self._build_model_from_trial(model_name, problem_type, trial)
-            scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
-            return float(np.mean(scores))
+            stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
+            X_train, _, y_train, _ = train_test_split(
+                X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+            )
+
+            cv = self._build_cv_splitter(problem_type, y_train)
+            scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
+
+            def objective(trial: optuna.Trial) -> float:
+                model = self._build_model_from_trial(model_name, problem_type, trial)
+                scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+                return float(np.mean(scores))
 
         study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=RANDOM_STATE))
         study.optimize(objective, n_trials=N_TRIALS, timeout=TIMEOUT_SECONDS, show_progress_bar=False)
@@ -116,7 +138,10 @@ class HyperparameterAgent(BaseAgent):
 
         # Retrain the final model on the full training split with the best params found.
         final_model = self._build_model_from_params(model_name, problem_type, best_params)
-        final_model.fit(X_train, y_train)
+        if is_unsupervised:
+            final_model.fit(X_train)
+        else:
+            final_model.fit(X_train, y_train)
 
         os.makedirs(MODELS_DIR, exist_ok=True)
         model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
@@ -219,6 +244,31 @@ class HyperparameterAgent(BaseAgent):
             cls = LGBMClassifier if is_clf else LGBMRegressor
             return cls(random_state=RANDOM_STATE, verbosity=-1, **params)
 
+        if model_name == "KMeans":
+            n_clusters = trial.suggest_int("n_clusters", 2, 10)
+            return KMeans(n_clusters=n_clusters, random_state=RANDOM_STATE, n_init=10)
+
+        if model_name == "DBSCAN":
+            params = {
+                "eps": trial.suggest_float("eps", 0.1, 2.0),
+                "min_samples": trial.suggest_int("min_samples", 3, 15),
+            }
+            return DBSCAN(**params)
+
+        if model_name == "IsolationForest":
+            params = {
+                "n_estimators": trial.suggest_int("n_estimators", 50, 300, step=50),
+                "contamination": trial.suggest_float("contamination", 0.01, 0.3),
+            }
+            return IsolationForest(random_state=RANDOM_STATE, **params)
+
+        if model_name == "LocalOutlierFactor":
+            params = {
+                "n_neighbors": trial.suggest_int("n_neighbors", 5, 50),
+                "contamination": trial.suggest_float("contamination", 0.01, 0.3),
+            }
+            return LocalOutlierFactor(novelty=False, **params)
+
         raise ValueError(f"No hyperparameter search space defined for model '{model_name}'.")
 
     def _build_model_from_params(self, model_name: str, problem_type: str, params: dict):
@@ -240,6 +290,14 @@ class HyperparameterAgent(BaseAgent):
         if model_name == "LightGBM" and _HAS_LIGHTGBM:
             cls = LGBMClassifier if is_clf else LGBMRegressor
             return cls(random_state=RANDOM_STATE, verbosity=-1, **params)
+        if model_name == "KMeans":
+            return KMeans(random_state=RANDOM_STATE, n_init=10, **params)
+        if model_name == "DBSCAN":
+            return DBSCAN(**params)
+        if model_name == "IsolationForest":
+            return IsolationForest(random_state=RANDOM_STATE, **params)
+        if model_name == "LocalOutlierFactor":
+            return LocalOutlierFactor(novelty=False, **params)
         raise ValueError(f"Cannot rebuild model '{model_name}' from params.")
 
     def _build_reasoning(self, model_name: str, study: optuna.Study, baseline_score, scoring: str) -> str:

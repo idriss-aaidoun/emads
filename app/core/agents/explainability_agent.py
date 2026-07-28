@@ -6,14 +6,6 @@ Answers the core research question of EMADS: "why does the model make its
 decisions?" Computes global feature importance, SHAP values, and asks the
 LLM to turn both into a plain-language explanation.
 """
-"""
-Explainability Agent Module
-==============================
-
-Answers the core research question of EMADS: "why does the model make its
-decisions?" Computes global feature importance, SHAP values, and asks the
-LLM to turn both into a plain-language explanation.
-"""
 
 import pickle
 import numpy as np
@@ -24,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState
+from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 from app.services.llm_service import LLMService
 from app.utils.plot_utils import save_current_figure
 
@@ -51,21 +43,24 @@ class ExplainabilityAgent(BaseAgent):
         data_path = state.get("preprocessed_data_path")
         model_path = state.get("model_path")
         target_column = state.get("target_column")
+        problem_type = state.get("problem_type")
         model_name = state.get("selected_model_name")
+        is_unsupervised = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
-        if not all([data_path, model_path, target_column, model_name]):
+        if not all([data_path, model_path, model_name]) or (not is_unsupervised and not target_column):
             self.logger.error(
                 "Missing state keys — data_path=%s model_path=%s target=%s model_name=%s",
                 bool(data_path), bool(model_path), bool(target_column), bool(model_name),
             )
             raise ValueError(
                 "Missing required state inputs: 'preprocessed_data_path', "
-                "'model_path', 'target_column' or 'selected_model_name'."
+                "'model_path', 'selected_model_name', or 'target_column' "
+                "(required for supervised problem types)."
             )
 
         self.logger.debug("Loading data from %s and model from %s", data_path, model_path)
         df = pd.read_csv(data_path)
-        X = df.drop(columns=[target_column])
+        X = df.drop(columns=[target_column]) if target_column else df.copy()
 
         with open(model_path, "rb") as f:
             model = pickle.load(f)

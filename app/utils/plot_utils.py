@@ -95,6 +95,23 @@ def plot_target_balance(df: pd.DataFrame, target_column: str, problem_type: str)
     return save_current_figure("target_distribution.png")
 
 
+def plot_cluster_scatter(X: pd.DataFrame, labels, title: str) -> str:
+    """2D projection (PCA if more than 2 numeric features) of cluster/anomaly
+    labels — the visual diagnostic for unsupervised problems, playing the
+    same role plot_confusion_matrix plays for classification."""
+    numeric_X = X.select_dtypes(include=["number"])
+    if numeric_X.shape[1] > 2:
+        from sklearn.decomposition import PCA
+        coords = PCA(n_components=2, random_state=42).fit_transform(numeric_X)
+    else:
+        coords = numeric_X.to_numpy()
+
+    plt.figure(figsize=(6, 5))
+    sns.scatterplot(x=coords[:, 0], y=coords[:, 1], hue=labels, palette="tab10", legend="full")
+    plt.title(title)
+    return save_current_figure("cluster_scatter.png")
+
+
 def detect_outliers_iqr(df: pd.DataFrame, numerical_columns: List[str]) -> Dict[str, int]:
     """Returns {column: outlier_count} using the classic 1.5*IQR rule."""
     outlier_counts: Dict[str, int] = {}

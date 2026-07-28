@@ -130,7 +130,7 @@ class PDFService:
 
         table_data = [["Metric", "Value"]]
         for key, value in metrics.items():
-            if key == "confusion_matrix":
+            if isinstance(value, (list, dict)):
                 continue
             display_value = f"{value:.4f}" if isinstance(value, float) else str(value)
             table_data.append([key.replace("_", " ").title(), display_value])
