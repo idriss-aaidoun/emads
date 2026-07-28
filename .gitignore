@@ -47,3 +47,6 @@ data/plots/*.png
 data/processed/*.csv
 reports/*.pdf
 reports/*.txt
+
+
+CLAUDE.md

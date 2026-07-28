@@ -8,7 +8,7 @@ Unlike traditional AutoML systems, EMADS relies on specialized AI agents coordin
 
 ---
 
-## Main Features
+## Main Features in this project 
 
 - Multi-Agent Architecture
 - Automated Exploratory Data Analysis (EDA)
