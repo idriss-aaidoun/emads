@@ -15,7 +15,7 @@ import pandas as pd
 from typing import Any, Dict, List
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState , AgentDecision
+from app.core.state.emads_state import EMADSState, AgentDecision, UNSUPERVISED_PROBLEM_TYPES
 
 # Column names commonly used for the target variable — helps the heuristic
 # below make a better guess than "always pick the last column".
@@ -31,6 +31,12 @@ HIGH_MISSING_RATIO_THRESHOLD = 0.4
 # A numeric target with more unique values than this is treated as regression
 # rather than classification.
 MAX_UNIQUE_FOR_CLASSIFICATION = 20
+
+# Clustering/anomaly detection need enough rows for a meaningful fit and
+# candidate comparison — LocalOutlierFactor's default n_neighbors=20 alone
+# needs more rows than that just to fit. This turns a confusing sklearn error
+# into a clear one, mirroring the classification min-3-per-class check below.
+MIN_ROWS_FOR_UNSUPERVISED = 30
 
 
 class DataUnderstandingAgent(BaseAgent):
@@ -60,12 +66,29 @@ class DataUnderstandingAgent(BaseAgent):
         numerical_columns = [c for c, p in columns_profile.items() if p["is_numeric"]]
         categorical_columns = [c for c, p in columns_profile.items() if not p["is_numeric"]]
 
-        target_column, target_decision = self._resolve_target_column(
-            df, user_target, categorical_columns, numerical_columns
-        )
         user_problem_type = state.get("problem_type")
-        problem_type, problem_decision = self._infer_problem_type(df, target_column, user_problem_type)
-        self._validate_target_for_modeling(df, target_column, problem_type)
+        if user_problem_type in UNSUPERVISED_PROBLEM_TYPES:
+            # Opt-in only: unlike classification vs. regression, nothing in a raw
+            # CSV reliably signals "the user wants clustering" — so this branch is
+            # only ever taken when problem_type was explicitly provided upstream.
+            self._validate_row_count_for_unsupervised(df, user_problem_type)
+            target_column, target_decision = self._skip_target_for_unsupervised(user_target, user_problem_type)
+            problem_type, problem_decision = user_problem_type, self.decide(
+                decision=f"Problem type: {user_problem_type}",
+                reasoning=(
+                    f"'{user_problem_type}' was explicitly requested by the user. "
+                    "Clustering/anomaly detection cannot be inferred from the data "
+                    "the way classification vs. regression can, so this type is only "
+                    "ever used on explicit opt-in."
+                ),
+                confidence=1.0,
+            )
+        else:
+            target_column, target_decision = self._resolve_target_column(
+                df, user_target, categorical_columns, numerical_columns
+            )
+            problem_type, problem_decision = self._infer_problem_type(df, target_column, user_problem_type)
+            self._validate_target_for_modeling(df, target_column, problem_type)
         quality_issues = self._detect_quality_issues(df, columns_profile)
 
         schema_info: Dict[str, Any] = {
@@ -174,6 +197,37 @@ class DataUnderstandingAgent(BaseAgent):
             ),
             confidence=0.4,
         )
+
+    def _skip_target_for_unsupervised(
+        self, user_target: str | None, problem_type: str
+    ) -> tuple[None, AgentDecision]:
+        """Clustering/anomaly detection have no target column by definition. Any
+        target_column the caller provided is intentionally ignored rather than
+        silently reused as if it meant something here — target_column=None is
+        the correct, final value, not a placeholder for "not yet resolved"."""
+        if user_target:
+            reasoning = (
+                f"target_column='{user_target}' was provided, but problem_type="
+                f"'{problem_type}' has no target column — it is ignored and every "
+                "column is treated as a feature."
+            )
+        else:
+            reasoning = f"problem_type='{problem_type}' has no target column by definition."
+        return None, self.decide(
+            decision="No target column used (unsupervised problem type)",
+            reasoning=reasoning,
+            confidence=1.0,
+        )
+
+    def _validate_row_count_for_unsupervised(self, df: pd.DataFrame, problem_type: str) -> None:
+        """Rejects datasets too small to fit/compare clustering or anomaly
+        detection candidates meaningfully, with a clear message instead of a
+        confusing sklearn error surfacing later in the pipeline."""
+        if len(df) < MIN_ROWS_FOR_UNSUPERVISED:
+            raise ValueError(
+                f"problem_type='{problem_type}' requires at least "
+                f"{MIN_ROWS_FOR_UNSUPERVISED} rows (got {len(df)})."
+            )
 
     def _infer_problem_type(self, df: pd.DataFrame, target_column: str, user_problem_type: str | None = None) -> tuple[str, AgentDecision]:
         if user_problem_type in ("classification", "regression"):

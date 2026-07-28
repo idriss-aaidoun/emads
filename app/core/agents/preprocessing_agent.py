@@ -15,7 +15,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState
+from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 
 OUTPUT_DIR = os.path.join("data", "outputs")
 
@@ -41,18 +41,20 @@ class PreprocessingAgent(BaseAgent):
         self.logger.info("execute() started")
         dataset_path = state.get("dataset_path")
         target_column = state.get("target_column")
+        problem_type = state.get("problem_type")
         schema_info = state.get("schema_info") or {}
+        is_unsupervised = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
         if not dataset_path:
             self.logger.error("'dataset_path' missing from state — aborting.")
             raise ValueError("'dataset_path' is missing from the state.")
-        if not target_column:
+        if not target_column and not is_unsupervised:
             self.logger.error("'target_column' missing from state — aborting.")
             raise ValueError("'target_column' is missing from the state.")
 
         self.logger.debug("Loading dataset from: %s", dataset_path)
         df = pd.read_csv(dataset_path)
-        if target_column not in df.columns:
+        if target_column and target_column not in df.columns:
             self.logger.error("Target column '%s' not found in dataset columns: %s", target_column, list(df.columns))
             raise ValueError(f"Target column '{target_column}' not found in dataset.")
 
@@ -70,10 +72,22 @@ class PreprocessingAgent(BaseAgent):
                 confidence=1.0,
             ))
 
-        # 2. Drop rows with missing target (can't train on unlabeled rows)
-        df = df.dropna(subset=[target_column]).reset_index(drop=True)
-        if df.empty:
-            raise ValueError("No rows remain after dropping missing target values.")
+        # 2. Drop rows with missing target (can't train on unlabeled rows) — not
+        # applicable when there is no target at all (clustering/anomaly detection).
+        if target_column:
+            df = df.dropna(subset=[target_column]).reset_index(drop=True)
+            if df.empty:
+                raise ValueError("No rows remain after dropping missing target values.")
+        else:
+            decisions.append(self.decide(
+                decision="Skipped target-dependent preprocessing steps",
+                reasoning=(
+                    f"problem_type='{problem_type}' is unsupervised — there is no "
+                    "target column, so missing-target row dropping and target "
+                    "encoding were skipped; every column is treated as a feature."
+                ),
+                confidence=1.0,
+            ))
 
         # 3. Drop useless columns (constant / near-empty / flagged by Data Understanding)
         columns_to_drop = self._select_columns_to_drop(df, target_column, schema_info)
@@ -89,8 +103,12 @@ class PreprocessingAgent(BaseAgent):
                 confidence=0.85,
             ))
 
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
+        if target_column:
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
+        else:
+            X = df.copy()
+            y = None
 
         # 4. Missing value imputation (per-column strategy, explained)
         X, imputation_report = self._impute_missing_values(X)
@@ -117,8 +135,9 @@ class PreprocessingAgent(BaseAgent):
                 confidence=0.75,
             ))
 
-        # 6. Encode target if it's categorical (classification)
-        if y.dtype == "object":
+        # 6. Encode target if it's categorical (classification) — no-op when
+        # there is no target (clustering/anomaly detection).
+        if target_column and y.dtype == "object":
             y = LabelEncoder().fit_transform(y.astype(str))
 
         # 7. Scale numerical features
@@ -135,7 +154,8 @@ class PreprocessingAgent(BaseAgent):
             ))
 
         processed_df = X.copy()
-        processed_df[target_column] = y
+        if target_column:
+            processed_df[target_column] = y
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         preprocessed_path = os.path.join(OUTPUT_DIR, "clean_dataset.csv")

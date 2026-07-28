@@ -19,14 +19,33 @@ from typing import Any, Dict, List
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, IsolationForest
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.metrics import silhouette_score
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
-from app.core.state.emads_state import EMADSState
+from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 from app.services.llm_service import LLMService
 
 CV_FOLDS = 5
 RANDOM_STATE = 42
+
+# Default configs used ONLY for the family-vs-family comparison below — the
+# winning algorithm's real hyperparameters are tuned afterwards by
+# HyperparameterAgent. eps=0.5 is workable because PreprocessingAgent already
+# StandardScales numeric columns, so 0.5 is in standardized-unit space.
+DEFAULT_N_CLUSTERS = 3
+DEFAULT_DBSCAN_EPS = 0.5
+DEFAULT_DBSCAN_MIN_SAMPLES = 5
+
+# Human-readable labels for each scoring metric, used in LLM prompts/fallback
+# text — centralized here instead of repeating the same ternary in 3 methods.
+METRIC_LABELS = {
+    "accuracy": "accuracy",
+    "neg_root_mean_squared_error": "RMSE (negated)",
+    "silhouette": "silhouette score",
+}
 
 # Optional boosted-tree libraries — only used if actually installed.
 try:
@@ -57,57 +76,44 @@ class ModelSelectionAgent(BaseAgent):
         data_path = state.get("preprocessed_data_path")
         target_column = state.get("target_column")
         problem_type = state.get("problem_type")
+        is_unsupervised = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
-        if not data_path or not target_column or not problem_type:
+        if not data_path or not problem_type:
             self.logger.error(
-                "Missing required state keys — data_path=%s target_column=%s problem_type=%s",
-                bool(data_path), bool(target_column), bool(problem_type),
+                "Missing required state keys — data_path=%s problem_type=%s",
+                bool(data_path), bool(problem_type),
             )
             raise ValueError(
-                "Missing required state inputs: 'preprocessed_data_path', "
-                "'target_column' or 'problem_type'."
+                "Missing required state inputs: 'preprocessed_data_path' or 'problem_type'."
             )
+        # DataUnderstandingAgent always resolves problem_type to one of the four
+        # concrete values before this agent runs (linear pipeline) — only the
+        # supervised ones require a target_column.
+        if not is_unsupervised and not target_column:
+            self.logger.error("'target_column' missing from state for supervised problem_type — aborting.")
+            raise ValueError("Missing required state input: 'target_column'.")
 
         self.logger.debug("Loading preprocessed data from: %s", data_path)
         df = pd.read_csv(data_path)
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
-
-        # Recreate the exact same split used by the Evaluation Agent, so the
-        # test set is never touched here (no leakage) and metrics stay comparable.
-        stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-        X_train, _, y_train, _ = train_test_split(
-            X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
-        )
-
         candidates = self._build_candidates(problem_type)
-        cv = self._build_cv_splitter(problem_type, y_train)
-        scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
 
-        results: List[Dict[str, Any]] = []
-        for model_name, model in candidates.items():
-            try:
-                scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
-                mean_s, std_s = float(np.mean(scores)), float(np.std(scores))
-                self.logger.info(
-                    "CV result — model=%s score=%.4f±%.4f metric=%s",
-                    model_name, mean_s, std_s, scoring,
-                )
-                results.append({
-                    "model_name": model_name,
-                    "mean_score": mean_s,
-                    "std_score": std_s,
-                    "scoring_metric": scoring,
-                })
-            except Exception as exc:
-                self.logger.warning("CV failed for model=%s error=%s", model_name, exc)
-                results.append({
-                    "model_name": model_name,
-                    "mean_score": float("-inf"),
-                    "std_score": 0.0,
-                    "scoring_metric": scoring,
-                    "error": str(exc),
-                })
+        if is_unsupervised:
+            scoring = "silhouette"
+            results = self._score_candidates_unsupervised(candidates, df)
+        else:
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
+
+            # Recreate the exact same split used by the Evaluation Agent, so the
+            # test set is never touched here (no leakage) and metrics stay comparable.
+            stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
+            X_train, _, y_train, _ = train_test_split(
+                X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+            )
+
+            cv = self._build_cv_splitter(problem_type, y_train)
+            scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
+            results = self._score_candidates_supervised(candidates, X_train, y_train, cv, scoring)
 
         results.sort(key=lambda r: r["mean_score"], reverse=True)
         best_result = results[0]
@@ -128,7 +134,7 @@ class ModelSelectionAgent(BaseAgent):
         model_selection_summary = self.llm.generate_summary(
             system_prompt=(
                 "You are a senior machine learning engineer. Explain in 4-6 concise bullet points "
-                "why a particular model was selected over the alternatives, using the cross-validation "
+                "why a particular model was selected over the alternatives, using the comparison "
                 "results and the confidence in the choice. Be clear and non-technical."
             ),
             user_prompt=self._build_llm_prompt(best_model_name, best_result, results, scoring),
@@ -153,7 +159,8 @@ class ModelSelectionAgent(BaseAgent):
             "model_selection_summary": model_selection_summary,
             "agent_decisions": [selection_decision],
             "logs": [self.log(
-                f"Compared {len(candidates)} model(s) via {CV_FOLDS}-fold CV. "
+                f"Compared {len(candidates)} model(s) via "
+                f"{'a single unsupervised fit' if is_unsupervised else f'{CV_FOLDS}-fold CV'}. "
                 f"Selected '{best_model_name}' (score={best_result['mean_score']:.4f})."
             )],
         }
@@ -175,7 +182,7 @@ class ModelSelectionAgent(BaseAgent):
                 )
             if _HAS_LIGHTGBM:
                 candidates["LightGBM"] = LGBMClassifier(random_state=RANDOM_STATE, verbosity=-1)
-        else:
+        elif problem_type == "regression":
             candidates = {
                 "LinearRegression": LinearRegression(),
                 "DecisionTree": DecisionTreeRegressor(random_state=RANDOM_STATE),
@@ -185,7 +192,77 @@ class ModelSelectionAgent(BaseAgent):
                 candidates["XGBoost"] = XGBRegressor(random_state=RANDOM_STATE, verbosity=0)
             if _HAS_LIGHTGBM:
                 candidates["LightGBM"] = LGBMRegressor(random_state=RANDOM_STATE, verbosity=-1)
+        elif problem_type == "clustering":
+            candidates = {
+                "KMeans": KMeans(n_clusters=DEFAULT_N_CLUSTERS, random_state=RANDOM_STATE, n_init=10),
+                "DBSCAN": DBSCAN(eps=DEFAULT_DBSCAN_EPS, min_samples=DEFAULT_DBSCAN_MIN_SAMPLES),
+            }
+        else:  # anomaly_detection
+            candidates = {
+                "IsolationForest": IsolationForest(random_state=RANDOM_STATE, contamination="auto"),
+                "LocalOutlierFactor": LocalOutlierFactor(novelty=False, contamination="auto"),
+            }
         return candidates
+
+    def _score_candidates_supervised(
+        self, candidates: Dict[str, Any], X_train, y_train, cv, scoring: str
+    ) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for model_name, model in candidates.items():
+            try:
+                scores = cross_val_score(model, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+                mean_s, std_s = float(np.mean(scores)), float(np.std(scores))
+                self.logger.info(
+                    "CV result — model=%s score=%.4f±%.4f metric=%s",
+                    model_name, mean_s, std_s, scoring,
+                )
+                results.append({
+                    "model_name": model_name,
+                    "mean_score": mean_s,
+                    "std_score": std_s,
+                    "scoring_metric": scoring,
+                })
+            except Exception as exc:
+                self.logger.warning("CV failed for model=%s error=%s", model_name, exc)
+                results.append({
+                    "model_name": model_name,
+                    "mean_score": float("-inf"),
+                    "std_score": 0.0,
+                    "scoring_metric": scoring,
+                    "error": str(exc),
+                })
+        return results
+
+    def _score_candidates_unsupervised(self, candidates: Dict[str, Any], X: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Compares clustering/anomaly detection algorithms via a single fit +
+        silhouette score on the full preprocessed dataset, instead of k-fold CV.
+
+        DBSCAN and LocalOutlierFactor (novelty=False) have no real out-of-sample
+        .predict() — only fit_predict — so there is no sklearn-idiomatic way to
+        do k-fold cross-validation here the way the supervised branch does.
+        Anomaly detection reuses this same silhouette metric on the binary
+        inlier(1)/outlier(-1) partition rather than inventing a third metric
+        family — imperfect on an imbalanced partition, but there is no ground
+        truth available to do better with.
+        """
+        results: List[Dict[str, Any]] = []
+        for model_name, model in candidates.items():
+            try:
+                labels = model.fit_predict(X)
+                # silhouette_score requires >=2 distinct labels; a degenerate fit
+                # (everything in one cluster, or DBSCAN labeling everything noise)
+                # gets the metric's true worst value instead of crashing.
+                score = float(silhouette_score(X, labels)) if len(set(labels)) >= 2 else -1.0
+            except Exception as exc:
+                self.logger.warning("Unsupervised scoring failed for model=%s error=%s", model_name, exc)
+                score = -1.0
+            results.append({
+                "model_name": model_name,
+                "mean_score": score,
+                "std_score": 0.0,
+                "scoring_metric": "silhouette",
+            })
+        return results
 
     def _build_cv_splitter(self, problem_type: str, y_train: pd.Series):
         if problem_type == "classification":
@@ -201,15 +278,21 @@ class ModelSelectionAgent(BaseAgent):
         comparison = ", ".join(
             f"{r['model_name']}={r['mean_score']:.4f}" for r in others
         )
-        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        metric_label = METRIC_LABELS.get(scoring, scoring)
+        method = (
+            "a single fit on the full preprocessed dataset (no train/test split "
+            "or cross-validation — see ModelSelectionAgent._score_candidates_unsupervised)"
+            if scoring == "silhouette" else
+            f"{CV_FOLDS}-fold cross-validation on the training set"
+        )
         return (
             f"'{best['model_name']}' achieved the best mean {metric_label} "
-            f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) across {CV_FOLDS}-fold "
-            f"cross-validation on the training set. Other candidates scored: {comparison}."
+            f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) via {method}. "
+            f"Other candidates scored: {comparison}."
         )
 
     def _build_llm_prompt(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
-        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        metric_label = METRIC_LABELS.get(scoring, scoring)
         top_rows = []
         for result in sorted(all_results, key=lambda r: r["mean_score"], reverse=True)[:5]:
             top_rows.append(
@@ -224,12 +307,13 @@ class ModelSelectionAgent(BaseAgent):
         )
 
     def _build_fallback_summary(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
-        metric_label = "accuracy" if scoring == "accuracy" else "RMSE (negated)"
+        metric_label = METRIC_LABELS.get(scoring, scoring)
         others = [r for r in all_results if r["model_name"] != best_model_name]
         comparison = ", ".join(f"{r['model_name']}={r['mean_score']:.4f}" for r in others[:4]) or "no alternatives recorded"
+        method = "a single fit on the full dataset" if scoring == "silhouette" else "cross-validation"
         return (
             f"* **Selected Model**: `{best_model_name}` was chosen because it achieved the best mean {metric_label} "
-            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) on cross-validation.\n"
+            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) via {method}.\n"
             f"* **Comparison**: Competing models scored: {comparison}.\n"
             "* **Caution**: If the margin is small, the choice should be validated further on fresh data before deployment."
         )

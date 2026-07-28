@@ -22,6 +22,15 @@ from datetime import datetime
 import operator
 
 
+# The four problem types EMADS supports. Classification/regression are
+# inferred automatically from the target column when not specified;
+# clustering/anomaly_detection are opt-in ONLY (see DataUnderstandingAgent) —
+# nothing in a raw CSV reliably signals that the user wants unsupervised
+# analysis, unlike target dtype/cardinality for classification vs regression.
+SUPERVISED_PROBLEM_TYPES = {"classification", "regression"}
+UNSUPERVISED_PROBLEM_TYPES = {"clustering", "anomaly_detection"}
+
+
 @dataclass
 class AgentDecision:
     agent_name: str
