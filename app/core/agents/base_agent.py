@@ -14,6 +14,8 @@ partial dictionary of state updates that an agent returns to the shared
 """
 
 from abc import ABC, abstractmethod
+from typing import Optional
+
 from app.core.state.emads_state import EMADSState, AgentDecision
 from app.utils.logger import get_logger
 
@@ -43,7 +45,7 @@ class BaseAgent(ABC):
         self,
         decision: str,
         reasoning: str,
-        confidence: float | None = None,
+        confidence: Optional[float] = None,
     ) -> AgentDecision:
         """Builds a structured decision record for the shared state."""
         return AgentDecision(

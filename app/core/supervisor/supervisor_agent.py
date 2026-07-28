@@ -48,6 +48,13 @@ class SupervisorAgent:
         ]
         self.workflow = self._build_workflow_graph()
 
+    # Fields the shared EMADSState accumulates via Annotated[..., operator.add]
+    # instead of overwriting (see app/core/state/emads_state.py). An agent
+    # returning the wrong type for one of these would otherwise fail deep
+    # inside LangGraph's state merge with a confusing error, so it's checked
+    # here instead.
+    ACCUMULATE_FIELDS = ("agent_decisions", "logs", "errors")
+
     def _wrap(self, step_name: str, agent) -> Callable[[EMADSState], dict]:
         """
         Wraps a single agent's execute() so every node in the graph gets,
@@ -56,10 +63,20 @@ class SupervisorAgent:
           2. a standard success log line
           3. exceptions turned into a clear, labeled RuntimeError instead of
              a raw traceback surfacing in Streamlit
+          4. full entry/exit/traceback logging to the per-run log file, via
+             BaseAgent.execute_logged()
+          5. a type check on the accumulate fields, so a broken agent fails
+             with a clear message instead of a confusing error inside LangGraph
         """
         def node(state: EMADSState) -> dict:
             try:
-                update = dict(agent.execute(state) or {})
+                update = dict(agent.execute_logged(state) or {})
+                for field_name in self.ACCUMULATE_FIELDS:
+                    if field_name in update and not isinstance(update[field_name], list):
+                        raise TypeError(
+                            f"Agent '{agent.name}' returned a non-list value for "
+                            f"accumulate field '{field_name}': {type(update[field_name]).__name__}"
+                        )
                 update["current_step"] = step_name
                 update.setdefault("logs", []).append(
                     self._format_log(step_name, "completed successfully")
@@ -67,7 +84,7 @@ class SupervisorAgent:
                 return update
             except Exception as exc:
                 raise RuntimeError(
-                    f"Pipeline stopped at step '{step_name}': {exc}"
+                    f"Pipeline stopped at step '{step_name}' ({type(exc).__name__}): {exc}"
                 ) from exc
         return node
 
