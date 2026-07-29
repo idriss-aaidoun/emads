@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
+from sklearn.inspection import permutation_importance
 from sklearn.metrics import (
     accuracy_score, precision_recall_fscore_support, confusion_matrix,
     roc_auc_score, mean_absolute_error, mean_squared_error, r2_score,
@@ -25,6 +26,7 @@ from app.utils import plot_utils
 
 RANDOM_STATE = 42
 CV_FOLDS = 5
+PERMUTATION_N_REPEATS = 10
 
 
 class EvaluationAgent(BaseAgent):
@@ -59,6 +61,7 @@ class EvaluationAgent(BaseAgent):
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
+        permutation_importance_payload = None
         if is_unsupervised:
             metrics_payload, evaluation_plots, decision = self._evaluate_unsupervised(df, model, problem_type)
         else:
@@ -110,17 +113,24 @@ class EvaluationAgent(BaseAgent):
                     "cv_std_accuracy": cv_std,
                 }
 
+            permutation_importance_payload = self._compute_permutation_importance(
+                model, X_test, y_test, problem_type
+            )
+
             decision = self.decide(
                 decision=f"Test score vs {CV_FOLDS}-fold CV score: consistency check",
                 reasoning=self._build_stability_reasoning(metrics_payload, cv_mean, cv_std, problem_type),
                 confidence=0.8,
             )
+            permutation_decision = self._build_permutation_decision(permutation_importance_payload)
 
         self.logger.info("Evaluation metrics: %s", metrics_payload)
+        agent_decisions = [decision] + ([permutation_decision] if not is_unsupervised else [])
         return {
             "metrics": metrics_payload,
             "evaluation_plots": evaluation_plots,
-            "agent_decisions": [decision],
+            "permutation_importance": permutation_importance_payload,
+            "agent_decisions": agent_decisions,
             "logs": [self.log(f"Evaluation complete. Metrics: {metrics_payload}")],
         }
 
@@ -199,6 +209,38 @@ class EvaluationAgent(BaseAgent):
                 return StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_STATE)
         n_splits = max(2, min(CV_FOLDS, len(y_train)))
         return KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+
+    def _compute_permutation_importance(
+        self, model, X_test: pd.DataFrame, y_test: pd.Series, problem_type: str
+    ) -> dict:
+        """Model-agnostic cross-check for ExplainabilityAgent's native/SHAP
+        importances: shuffles one feature at a time on the held-out test set
+        and measures the resulting drop in score, rather than relying on
+        attribution internal to the model. Computed here (not in
+        ExplainabilityAgent) because the train/test split already lives in
+        this agent."""
+        scoring = "accuracy" if problem_type == "classification" else "r2"
+        result = permutation_importance(
+            model, X_test, y_test, scoring=scoring,
+            n_repeats=PERMUTATION_N_REPEATS, random_state=RANDOM_STATE, n_jobs=-1,
+        )
+        importance = dict(zip(X_test.columns, [float(v) for v in result.importances_mean]))
+        return dict(sorted(importance.items(), key=lambda item: item[1], reverse=True))
+
+    def _build_permutation_decision(self, permutation_importance_payload: dict) -> AgentDecision:
+        top_feature = next(iter(permutation_importance_payload), "unknown")
+        top_score = permutation_importance_payload.get(top_feature, 0.0)
+        return self.decide(
+            decision=f"Permutation importance top feature: '{top_feature}'",
+            reasoning=(
+                f"Shuffling '{top_feature}' on the held-out test set dropped the score "
+                f"by {top_score:.4f} on average over {PERMUTATION_N_REPEATS} repeats — "
+                "the largest drop of any feature. This is a model-agnostic cross-check "
+                "for the native/SHAP feature importance computed later by "
+                "ExplainabilityAgent."
+            ),
+            confidence=float(max(0.3, min(0.9, top_score * 5))) if top_score > 0 else 0.3,
+        )
 
     def _compute_roc_auc(self, model, X_test, y_test) -> float | None:
         """ROC AUC requires predicted probabilities; not every model type

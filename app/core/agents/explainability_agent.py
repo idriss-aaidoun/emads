@@ -66,6 +66,7 @@ class ExplainabilityAgent(BaseAgent):
             model = pickle.load(f)
 
         feature_importance = self._compute_feature_importance(model, X.columns)
+        permutation_importance = state.get("permutation_importance") or {}
 
         shap_plots = []
         shap_top_features = []
@@ -86,7 +87,9 @@ class ExplainabilityAgent(BaseAgent):
             "Calling LLM for explainability summary (model=%s)",
             getattr(self.llm, 'model_name', 'unknown'),
         )
-        fallback_summary = self._build_fallback_summary(model_name, feature_importance, shap_top_features)
+        fallback_summary = self._build_fallback_summary(
+            model_name, feature_importance, shap_top_features, permutation_importance
+        )
         explainability_summary = self.llm.generate_summary(
             system_prompt=(
                 "You are a senior data scientist explaining a trained model's behavior "
@@ -94,7 +97,9 @@ class ExplainabilityAgent(BaseAgent):
                 "which features matter most, what that implies about the data, and any "
                 "caveats about trusting these explanations. No code, no jargon."
             ),
-            user_prompt=self._build_llm_prompt(model_name, feature_importance, shap_top_features),
+            user_prompt=self._build_llm_prompt(
+                model_name, feature_importance, shap_top_features, permutation_importance
+            ),
             fallback_message=fallback_summary,
         )
         if not (explainability_summary or "").strip():
@@ -110,11 +115,13 @@ class ExplainabilityAgent(BaseAgent):
         explanation_scope = (
             f"a sample of {SHAP_SAMPLE_SIZE} rows" if shap_top_features else "the full training data"
         )
+        top_feature = self._top_feature(feature_importance)
+        cross_check_note = self._build_cross_check_note(top_feature, permutation_importance)
         importance_decision = self.decide(
-            decision=f"Top predictive feature: '{self._top_feature(feature_importance)}'",
+            decision=f"Top predictive feature: '{top_feature}'",
             reasoning=(
                 f"Derived from {explanation_source}, "
-                f"computed on {explanation_scope}."
+                f"computed on {explanation_scope}. {cross_check_note}"
             ),
             confidence=0.7,
         )
@@ -131,8 +138,27 @@ class ExplainabilityAgent(BaseAgent):
             "logs": [state_note],
         }
 
+    def _build_cross_check_note(self, top_feature: str, permutation_importance: dict) -> str:
+        if not permutation_importance:
+            return ""
+        perm_top_feature = next(iter(permutation_importance), None)
+        if perm_top_feature == top_feature:
+            return (
+                f"Permutation importance (a model-agnostic cross-check on the held-out "
+                f"test set) agrees: '{perm_top_feature}' is also its top feature."
+            )
+        return (
+            f"Note: permutation importance on the held-out test set instead ranks "
+            f"'{perm_top_feature}' highest, which is worth investigating rather than "
+            f"trusting a single method blindly."
+        )
+
     def _build_fallback_summary(
-        self, model_name: str, feature_importance: dict, shap_top_features: list[str]
+        self,
+        model_name: str,
+        feature_importance: dict,
+        shap_top_features: list[str],
+        permutation_importance: dict,
     ) -> str:
         top_features = list(feature_importance.items())[:5]
         bullets = []
@@ -150,6 +176,15 @@ class ExplainabilityAgent(BaseAgent):
             bullets.append(
                 f"* **SHAP Feature Impact**: Global SHAP analysis highlights `{', '.join(shap_top_features[:3])}` "
                 f"as the top drivers of individual sample predictions."
+            )
+
+        if permutation_importance:
+            perm_top = list(permutation_importance.items())[:3]
+            perm_str = ", ".join([f"`{name}` ({score:.4f})" for name, score in perm_top])
+            bullets.append(
+                f"* **Permutation Importance Cross-Check**: Shuffling each feature on the held-out "
+                f"test set and measuring the score drop independently points to `{perm_str}` "
+                f"as most influential — a model-agnostic confirmation of the ranking above."
             )
 
         bullets.append(
@@ -211,7 +246,13 @@ class ExplainabilityAgent(BaseAgent):
     def _top_feature(self, feature_importance: dict) -> str:
         return next(iter(feature_importance), "unknown")
 
-    def _build_llm_prompt(self, model_name: str, feature_importance: dict, shap_top_features: list[str]) -> str:
+    def _build_llm_prompt(
+        self,
+        model_name: str,
+        feature_importance: dict,
+        shap_top_features: list[str],
+        permutation_importance: dict,
+    ) -> str:
         top_native = list(feature_importance.items())[:5]
         native_lines = "\n".join(f"  - {name}: {score:.4f}" for name, score in top_native)
 
@@ -221,5 +262,9 @@ class ExplainabilityAgent(BaseAgent):
         )
         if shap_top_features:
             prompt += f"Top features by SHAP value: {', '.join(shap_top_features)}\n\n"
+        if permutation_importance:
+            top_perm = list(permutation_importance.items())[:5]
+            perm_lines = ", ".join(f"{name} ({score:.4f})" for name, score in top_perm)
+            prompt += f"Top features by permutation importance (held-out test set): {perm_lines}\n\n"
         prompt += "Please provide your structured explanation now."
         return prompt

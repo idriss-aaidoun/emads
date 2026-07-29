@@ -71,6 +71,8 @@ class EMADSState(TypedDict, total=False):
     metrics: Optional[Dict[str, Any]]
     evaluation_plots: Optional[List[str]]
 
+    permutation_importance: Optional[Dict[str, float]]
+
     feature_importance: Optional[Dict[str, float]]
     shap_plots: Optional[List[str]]
     explainability_summary: Optional[str]
