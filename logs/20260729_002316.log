@@ -1,0 +1,73 @@
+2026-07-29 00:23:16 | INFO     | emads.ui | Pipeline run started — dataset=Titanic-Dataset.csv target_column=Survived
+2026-07-29 00:23:17 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-07-29 00:23:17 | INFO     | emads.data_understanding_agent | execute() started
+2026-07-29 00:23:17 | DEBUG    | emads.data_understanding_agent | Loading dataset from: data\uploads\Titanic-Dataset.csv
+2026-07-29 00:23:17 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (891, 12)
+2026-07-29 00:23:17 | INFO     | emads.data_understanding_agent | execute() complete — rows=891 cols=12 target='Survived' problem_type='classification' quality_issues=4
+2026-07-29 00:23:17 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-07-29 00:23:17 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/8)
+2026-07-29 00:23:17 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-07-29 00:23:17 | INFO     | emads.eda_agent | execute() started
+2026-07-29 00:23:17 | DEBUG    | emads.eda_agent | Reading dataset from: data\uploads\Titanic-Dataset.csv
+2026-07-29 00:23:19 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-07-29 00:23:20 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1422, starts_with="Here's a concise summary of the dataset's characteristics:\n\n* **Dataset Shape:**")
+2026-07-29 00:23:20 | INFO     | emads.eda_agent | execute() complete — plots=9 outlier_cols=4
+2026-07-29 00:23:20 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-07-29 00:23:20 | INFO     | emads.ui | Pipeline step completed — step=eda (2/8)
+2026-07-29 00:23:20 | INFO     | emads.ui | LLM payload — eda_summary chars=1422 starts_with="Here's a concise summary of the dataset's characteristics:\n\n* **Dataset Shape:**"
+2026-07-29 00:23:20 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-07-29 00:23:20 | INFO     | emads.preprocessing_agent | execute() started
+2026-07-29 00:23:20 | DEBUG    | emads.preprocessing_agent | Loading dataset from: data\uploads\Titanic-Dataset.csv
+2026-07-29 00:23:20 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(891, 11) dropped=3 imputed=2 encoded=2 scaling=StandardScaler
+2026-07-29 00:23:20 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-07-29 00:23:20 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-07-29 00:23:20 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/8)
+2026-07-29 00:23:20 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-07-29 00:23:20 | INFO     | emads.model_selection_agent | execute() started
+2026-07-29 00:23:20 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-07-29 00:23:29 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.7893±0.0277 metric=accuracy
+2026-07-29 00:23:33 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=0.7599±0.0310 metric=accuracy
+2026-07-29 00:23:34 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.8160±0.0124 metric=accuracy
+2026-07-29 00:23:35 | INFO     | emads.model_selection_agent | CV result — model=XGBoost score=0.7936±0.0256 metric=accuracy
+2026-07-29 00:23:38 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=0.8006±0.0156 metric=accuracy
+2026-07-29 00:23:38 | INFO     | emads.model_selection_agent | Calling LLM for model selection summary (model=llama-3.1-8b-instant)
+2026-07-29 00:23:38 | INFO     | emads.model_selection_agent | LLM model selection summary received (chars=1508, starts_with='Here are 4-6 concise bullet points explaining why RandomForest was selected over')
+2026-07-29 00:23:38 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=RandomForest score=0.8160
+2026-07-29 00:23:38 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-07-29 00:23:38 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/8)
+2026-07-29 00:23:38 | INFO     | emads.ui | LLM payload — model_selection_summary chars=1508 starts_with='Here are 4-6 concise bullet points explaining why RandomForest was selected over'
+2026-07-29 00:23:38 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-07-29 00:23:57 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-07-29 00:23:57 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/8)
+2026-07-29 00:23:57 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-07-29 00:23:57 | INFO     | emads.evaluation_agent | execute() started
+2026-07-29 00:23:58 | INFO     | emads.evaluation_agent | Evaluation metrics: {'accuracy': 0.8156424581005587, 'precision': 0.8151608553265266, 'recall': 0.8156424581005587, 'f1_score': 0.8120479353488633, 'roc_auc': 0.827931488801054, 'confusion_matrix': [[99, 11], [22, 47]], 'cv_mean_accuracy': 0.8146163695459471, 'cv_std_accuracy': 0.02101821050660444}
+2026-07-29 00:23:58 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-07-29 00:23:58 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/8)
+2026-07-29 00:23:58 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-07-29 00:23:58 | INFO     | emads.explainability_agent | execute() started
+2026-07-29 00:23:58 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-07-29 00:23:58 | INFO     | emads.explainability_agent | Computing SHAP values (model=RandomForest sample_size=100)
+2026-07-29 00:23:59 | WARNING  | emads.explainability_agent | SHAP computation skipped: 'NoneType' object has no attribute 'shape'
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\explainability_agent.py", line 74, in execute
+    shap_plots, shap_top_features = self._compute_shap(model, X, model_name)
+                                    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\explainability_agent.py", line 199, in _compute_shap
+    shap.summary_plot(values_for_plot, sample, plot_type="bar", show=False)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\shap\plots\_beeswarm.py", line 606, in summary_legacy
+    if len(shap_exp.base_values.shape) == 2 and shap_exp.base_values.shape[1] > 2:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'shape'
+2026-07-29 00:23:59 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-07-29 00:23:59 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1954, starts_with="Here's a plain English explanation of the model's behavior:\n\n* **Sex is a strong")
+2026-07-29 00:23:59 | INFO     | emads.explainability_agent | execute() complete — top_feature=Sex_male shap_plots=0
+2026-07-29 00:23:59 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-07-29 00:23:59 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/8)
+2026-07-29 00:23:59 | INFO     | emads.ui | LLM payload — explainability_summary chars=1954 starts_with="Here's a plain English explanation of the model's behavior:\n\n* **Sex is a strong"
+2026-07-29 00:23:59 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-07-29 00:24:00 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-07-29 00:24:00 | INFO     | emads.ui | Pipeline step completed — step=reporting (8/8)
+2026-07-29 00:24:00 | INFO     | emads.ui | Reporting output — report_path=reports\EMADS_Report_20260729_002316.pdf
+2026-07-29 00:24:00 | INFO     | emads.ui | Pipeline run completed successfully.

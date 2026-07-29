@@ -18,7 +18,7 @@ import pandas as pd
 
 from app.core.state.emads_state import create_initial_state, UNSUPERVISED_PROBLEM_TYPES
 from app.core.supervisor.supervisor_agent import SupervisorAgent
-from app.utils.file_utils import ensure_dir
+from app.utils.file_utils import ensure_dir, prune_old_files
 import app.utils.logger as logger_utils
 
 # Pipeline-level logger for the UI layer
@@ -160,6 +160,18 @@ def render_sidebar():
                 mime="text/plain",
                 use_container_width=True,
             )
+    # -----------------------------------------------------------------------
+
+    # ---- Cleanup button — logs/reports/uploads grow one file per run ------
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🧹 Clean old files", use_container_width=True):
+        n_logs = prune_old_files("logs", keep_last=5, pattern="*.log")
+        n_reports = prune_old_files("reports", keep_last=5, pattern="*.pdf")
+        n_uploads = prune_old_files(os.path.join("data", "uploads"), keep_last=5, pattern="*")
+        st.sidebar.success(
+            f"Deleted {n_logs + n_reports + n_uploads} old file(s) "
+            f"({n_logs} logs, {n_reports} reports, {n_uploads} uploads)."
+        )
     # -----------------------------------------------------------------------
 
     st.sidebar.markdown("---")
