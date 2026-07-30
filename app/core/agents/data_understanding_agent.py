@@ -176,26 +176,39 @@ class DataUnderstandingAgent(BaseAgent):
                 confidence=1.0,
             )
 
-        for col in df.columns:
-            if col.strip().lower() in COMMON_TARGET_NAMES:
-                return col, self.decide(
-                    decision=f"Selected '{col}' as target column",
-                    reasoning=(
-                        f"Column name '{col}' matches a common target naming "
-                        f"convention ({sorted(COMMON_TARGET_NAMES)})."
-                    ),
-                    confidence=0.8,
-                )
+        name_matches = [col for col in df.columns if col.strip().lower() in COMMON_TARGET_NAMES]
+        if name_matches:
+            col = name_matches[0]
+            # Confidence drops when more than one column matches a common target
+            # name — the heuristic is ambiguous, not wrong, so it should say so.
+            confidence = max(0.5, min(0.9, 0.9 - 0.15 * (len(name_matches) - 1)))
+            reasoning = (
+                f"Column name '{col}' matches a common target naming "
+                f"convention ({sorted(COMMON_TARGET_NAMES)})."
+            )
+            if len(name_matches) > 1:
+                reasoning += f" Note: {len(name_matches)} columns matched ({name_matches}); the first was used."
+            return col, self.decide(
+                decision=f"Selected '{col}' as target column",
+                reasoning=reasoning,
+                confidence=confidence,
+            )
 
         fallback = str(df.columns[-1])
+        # A low unique/row ratio looks target-like (a handful of repeated
+        # classes); a high ratio looks ID-like (a poor fallback guess).
+        n_rows = len(df)
+        unique_ratio = df[fallback].nunique(dropna=True) / n_rows if n_rows else 1.0
+        confidence = max(0.15, min(0.55, 0.55 - unique_ratio * 0.4))
         return fallback, self.decide(
             decision=f"Selected '{fallback}' as target column (fallback)",
             reasoning=(
                 "No target was specified and no column matched a common target "
                 "name, so the last column of the dataset was assumed to be the "
-                "target. This should be confirmed by the user."
+                f"target (unique/row ratio={unique_ratio:.2f}). This should be "
+                "confirmed by the user."
             ),
-            confidence=0.4,
+            confidence=confidence,
         )
 
     def _skip_target_for_unsupervised(
@@ -241,11 +254,17 @@ class DataUnderstandingAgent(BaseAgent):
         n_unique = target_series.nunique(dropna=True)
         is_numeric = pd.api.types.is_numeric_dtype(target_series)
 
+        n_rows = len(target_series)
+        unique_ratio = n_unique / n_rows if n_rows else 0.0
+
         if not is_numeric:
+            # High cardinality relative to row count hints this is actually
+            # free text/an ID rather than a genuine class label.
+            confidence = max(0.7, min(0.97, 0.97 - unique_ratio * 0.3))
             return "classification", self.decide(
                 decision="Problem type: classification",
                 reasoning=f"Target column '{target_column}' is non-numeric ({target_series.dtype}).",
-                confidence=0.95,
+                confidence=confidence,
             )
 
         is_float = pd.api.types.is_float_dtype(target_series)
@@ -253,16 +272,20 @@ class DataUnderstandingAgent(BaseAgent):
 
         # If floating point, or range > 50, or all unique numbers, treat as regression
         if is_float or val_range > 50 or (n_unique > 10 and n_unique == len(target_series)):
+            # The closer to "every value is unique," the more clearly continuous.
+            confidence = max(0.6, min(0.97, 0.6 + unique_ratio * 0.35))
             return "regression", self.decide(
                 decision="Problem type: regression",
                 reasoning=(
                     f"Target column '{target_column}' is numeric with range {val_range} and {n_unique} unique values, "
                     f"suggesting a continuous numeric target."
                 ),
-                confidence=0.85,
+                confidence=confidence,
             )
 
         if n_unique <= MAX_UNIQUE_FOR_CLASSIFICATION:
+            # Fewer classes relative to the threshold is a cleaner signal.
+            confidence = max(0.6, min(0.95, 0.95 - (n_unique / MAX_UNIQUE_FOR_CLASSIFICATION) * 0.35))
             return "classification", self.decide(
                 decision="Problem type: classification",
                 reasoning=(
@@ -270,13 +293,14 @@ class DataUnderstandingAgent(BaseAgent):
                     f"{n_unique} unique values (<= {MAX_UNIQUE_FOR_CLASSIFICATION}), "
                     f"suggesting discrete classes."
                 ),
-                confidence=0.75,
+                confidence=confidence,
             )
 
+        confidence = max(0.6, min(0.97, 0.6 + unique_ratio * 0.35))
         return "regression", self.decide(
             decision="Problem type: regression",
             reasoning=f"Target column '{target_column}' is numeric with {n_unique} unique values.",
-            confidence=0.85,
+            confidence=confidence,
         )
 
     def _validate_target_for_modeling(

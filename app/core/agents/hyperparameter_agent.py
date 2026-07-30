@@ -165,7 +165,7 @@ class HyperparameterAgent(BaseAgent):
             "agent_decisions": [self.decide(
                 decision=f"Tuned '{model_name}' hyperparameters: {best_params}",
                 reasoning=self._build_reasoning(model_name, study, baseline_score, scoring),
-                confidence=0.75,
+                confidence=self._confidence_from_improvement(improvement),
             )],
             "logs": [self.log(
                 f"Ran {len(study.trials)} Optuna trial(s) on '{model_name}'. "
@@ -176,6 +176,17 @@ class HyperparameterAgent(BaseAgent):
     # ------------------------------------------------------------------
     # Internal steps
     # ------------------------------------------------------------------
+
+    def _confidence_from_improvement(self, improvement: float | None) -> float:
+        """
+        Mirrors ModelSelectionAgent._confidence_from_margin: confidence
+        reflects how clearly tuning improved on the untuned baseline, not a
+        fixed value. Without a baseline to compare against (e.g. no CV result
+        recorded for this model), there is nothing to ground the number in.
+        """
+        if improvement is None:
+            return 0.6
+        return float(max(0.4, min(0.95, 0.5 + max(improvement, 0) * 10)))
 
     def _get_baseline_score(self, state: EMADSState, model_name: str) -> float | None:
         """Reads the model's un-tuned CV score from Model Selection results, for comparison."""

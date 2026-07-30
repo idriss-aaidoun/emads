@@ -117,10 +117,14 @@ class EvaluationAgent(BaseAgent):
                 model, X_test, y_test, problem_type
             )
 
+            stability_reasoning, gap = self._build_stability_reasoning(metrics_payload, cv_mean, cv_std, problem_type)
+            # Smaller test/CV gap means more confident the model generalizes,
+            # rather than a fixed confidence regardless of the actual gap.
+            stability_confidence = float(max(0.4, min(0.9, 0.9 - gap * 3)))
             decision = self.decide(
                 decision=f"Test score vs {CV_FOLDS}-fold CV score: consistency check",
-                reasoning=self._build_stability_reasoning(metrics_payload, cv_mean, cv_std, problem_type),
-                confidence=0.8,
+                reasoning=stability_reasoning,
+                confidence=stability_confidence,
             )
             permutation_decision = self._build_permutation_decision(permutation_importance_payload)
 
@@ -256,14 +260,15 @@ class EvaluationAgent(BaseAgent):
         except Exception:
             return None
 
-    def _build_stability_reasoning(self, metrics: dict, cv_mean: float, cv_std: float, problem_type: str) -> str:
+    def _build_stability_reasoning(self, metrics: dict, cv_mean: float, cv_std: float, problem_type: str) -> tuple[str, float]:
         test_score = metrics.get("accuracy") if problem_type == "classification" else -metrics.get("rmse", 0)
         gap = abs(test_score - cv_mean)
         if gap > 0.1:
             verdict = "The gap between the test score and CV score suggests possible overfitting or an unrepresentative test split."
         else:
             verdict = "The test score is consistent with the cross-validation score, suggesting the model generalizes reliably."
-        return (
+        reasoning = (
             f"Test score: {test_score:.4f}. Cross-validation: {cv_mean:.4f} ± {cv_std:.4f} "
             f"across {CV_FOLDS} folds. {verdict}"
         )
+        return reasoning, gap

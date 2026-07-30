@@ -72,6 +72,15 @@ class EDAAgent(BaseAgent):
             "total_missing_values": int(df.isnull().sum().sum()),
         }
 
+        if outliers and numerical_columns:
+            # More affected columns is a stronger signal this is a real
+            # pattern in the data, not one-off noise in a single column.
+            affected_ratio = len(outliers) / len(numerical_columns)
+            outlier_confidence = max(0.5, min(0.9, 0.5 + affected_ratio * 0.4))
+        else:
+            # The "no outliers" call is more trustworthy with more rows behind it.
+            outlier_confidence = max(0.6, min(0.9, 0.6 + min(len(df), 1000) / 1000 * 0.3))
+
         outlier_decision = self.decide(
             decision=f"Flagged {len(outliers)} column(s) with outliers"
             if outliers else "No significant outliers detected",
@@ -80,7 +89,7 @@ class EDAAgent(BaseAgent):
                 f"Columns with outliers: {list(outliers.keys())}" if outliers
                 else "All numerical columns fall within 1.5*IQR of their quartiles."
             ),
-            confidence=0.7,
+            confidence=outlier_confidence,
         )
 
         self.logger.info(

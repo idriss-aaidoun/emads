@@ -92,6 +92,7 @@ class PreprocessingAgent(BaseAgent):
         # 3. Drop useless columns (constant / near-empty / flagged by Data Understanding)
         columns_to_drop = self._select_columns_to_drop(df, target_column, schema_info)
         if columns_to_drop:
+            drop_confidence = self._confidence_from_drop_reasons(df, columns_to_drop)
             df = df.drop(columns=columns_to_drop)
             report["dropped_columns"] = columns_to_drop
             decisions.append(self.decide(
@@ -100,7 +101,7 @@ class PreprocessingAgent(BaseAgent):
                     "These columns were constant, had >{:.0%} missing values, or were "
                     "flagged as likely ID columns by the Data Understanding Agent."
                 ).format(DROP_COLUMN_MISSING_THRESHOLD),
-                confidence=0.85,
+                confidence=drop_confidence,
             ))
 
         if target_column:
@@ -111,20 +112,30 @@ class PreprocessingAgent(BaseAgent):
             y = None
 
         # 4. Missing value imputation (per-column strategy, explained)
+        pre_imputation_missing_ratio = X.isnull().mean()
         X, imputation_report = self._impute_missing_values(X)
         report["imputation"] = imputation_report
         if imputation_report:
+            # Fewer missing values means less fabricated data, so confidence
+            # is higher when the average imputed ratio is lower.
+            avg_missing_ratio = float(pre_imputation_missing_ratio[list(imputation_report.keys())].mean())
+            imputation_confidence = max(0.5, min(0.95, 0.95 - avg_missing_ratio * 0.5))
             decisions.append(self.decide(
                 decision=f"Imputed missing values in {len(imputation_report)} column(s)",
                 reasoning="Numeric columns use median imputation (robust to outliers); "
-                          "categorical columns use a 'Missing' placeholder category.",
-                confidence=0.8,
+                          "categorical columns use a 'Missing' placeholder category. "
+                          f"Average missing ratio across imputed columns: {avg_missing_ratio:.2%}.",
+                confidence=imputation_confidence,
             ))
 
         # 5. Categorical encoding (one-hot for low cardinality, label encoding otherwise)
         X, encoding_report = self._encode_categoricals(X)
         report["encoding"] = encoding_report
         if encoding_report:
+            # One-hot is the "clean" case here; a higher share of one-hot vs
+            # label encoding signals a cleaner, lower-cardinality dataset.
+            one_hot_share = sum(1 for v in encoding_report.values() if v == "one_hot") / len(encoding_report)
+            encoding_confidence = max(0.6, min(0.9, 0.6 + one_hot_share * 0.3))
             decisions.append(self.decide(
                 decision=f"Encoded {len(encoding_report)} categorical column(s)",
                 reasoning=(
@@ -132,7 +143,7 @@ class PreprocessingAgent(BaseAgent):
                     f"categories; label encoding used for higher-cardinality columns to "
                     f"avoid excessive dimensionality."
                 ),
-                confidence=0.75,
+                confidence=encoding_confidence,
             ))
 
         # 6. Encode target if it's categorical (classification) — no-op when
@@ -143,14 +154,21 @@ class PreprocessingAgent(BaseAgent):
         # 7. Scale numerical features
         numeric_cols = X.select_dtypes(include=["number"]).columns
         if len(numeric_cols) > 0:
+            # The more the original scales differed, the more clearly scaling
+            # was needed (a near-1.0 ratio means columns were already comparable).
+            stds = X[numeric_cols].std().replace(0, pd.NA).dropna()
+            std_ratio = float(stds.max() / stds.min()) if len(stds) >= 2 else 1.0
+            scaling_confidence = max(0.6, min(0.9, 0.6 + min(std_ratio, 10) / 10 * 0.3))
+
             scaler = StandardScaler()
             X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
             report["scaling"] = "StandardScaler"
             decisions.append(self.decide(
                 decision=f"Applied StandardScaler to {len(numeric_cols)} numeric column(s)",
                 reasoning="Standardization (zero mean, unit variance) benefits distance-based "
-                          "and gradient-based models without harming tree-based models.",
-                confidence=0.8,
+                          "and gradient-based models without harming tree-based models. "
+                          f"Original column scales differed by a factor of {std_ratio:.1f}.",
+                confidence=scaling_confidence,
             ))
 
         processed_df = X.copy()
@@ -200,6 +218,20 @@ class PreprocessingAgent(BaseAgent):
             if col in flagged or missing_ratio > DROP_COLUMN_MISSING_THRESHOLD:
                 to_drop.append(col)
         return to_drop
+
+    def _confidence_from_drop_reasons(self, df: pd.DataFrame, columns_to_drop: list[str]) -> float:
+        """
+        Columns dropped for constant-value/high-cardinality reasons are
+        unambiguous drops regardless of their missing ratio (contribute 1.0);
+        columns dropped for high-missingness are more confidently "the right
+        call" the higher that missing ratio actually is.
+        """
+        ratios = []
+        for col in columns_to_drop:
+            missing_ratio = float(df[col].isnull().mean())
+            ratios.append(1.0 if missing_ratio <= DROP_COLUMN_MISSING_THRESHOLD else missing_ratio)
+        avg_ratio = sum(ratios) / len(ratios) if ratios else 1.0
+        return max(0.6, min(0.98, 0.6 + avg_ratio * 0.35))
 
     def _impute_missing_values(self, X: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         report = {}

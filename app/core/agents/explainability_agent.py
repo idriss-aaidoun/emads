@@ -123,7 +123,7 @@ class ExplainabilityAgent(BaseAgent):
                 f"Derived from {explanation_source}, "
                 f"computed on {explanation_scope}. {cross_check_note}"
             ),
-            confidence=0.7,
+            confidence=self._confidence_from_importance_margin(feature_importance, permutation_importance, top_feature),
         )
 
         self.logger.info(
@@ -242,6 +242,30 @@ class ExplainabilityAgent(BaseAgent):
             )[:5]
         ]
         return [summary_plot_path], top_features
+
+    def _confidence_from_importance_margin(
+        self, feature_importance: dict, permutation_importance: dict, top_feature: str
+    ) -> float:
+        """
+        Confidence reflects how clearly the top feature's importance stands
+        out from the runner-up, boosted or penalized by whether the
+        permutation-importance cross-check (a model-agnostic, held-out-test-set
+        signal) agrees — rather than a fixed value regardless of the margin.
+        """
+        scores = list(feature_importance.values())
+        if len(scores) >= 2 and scores[0] > 0:
+            margin_ratio = (scores[0] - scores[1]) / scores[0]
+        else:
+            margin_ratio = 0.0
+        confidence = max(0.5, min(0.9, 0.5 + margin_ratio * 0.4))
+
+        if permutation_importance:
+            perm_top_feature = next(iter(permutation_importance), None)
+            if perm_top_feature == top_feature:
+                confidence = min(0.95, confidence + 0.05)
+            else:
+                confidence = max(0.4, confidence - 0.1)
+        return float(confidence)
 
     def _top_feature(self, feature_importance: dict) -> str:
         return next(iter(feature_importance), "unknown")
