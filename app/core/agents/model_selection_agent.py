@@ -32,11 +32,12 @@ from app.services.llm_service import LLMService
 CV_FOLDS = 5
 RANDOM_STATE = 42
 
-# Confidence for a selection resolved by LLM arbitration (Wilcoxon tie) —
+# Floor confidence for an arbitrated tie with no 3rd candidate to measure
+# field separation against (e.g. only 2 candidates were compared at all) —
 # matches DataUnderstandingAgent's own LLM-arbitration confidence, so the
-# project has one consistent value for "reasoned but not statistically
-# proven" across agents, instead of each inventing its own number.
-ARBITRATION_CONFIDENCE = 0.6
+# project falls back to one consistent "reasoned but unmeasured" value
+# instead of each agent inventing its own number for this edge case.
+ARBITRATION_CONFIDENCE_FLOOR = 0.6
 
 # Default configs used ONLY for the family-vs-family comparison below — the
 # winning algorithm's real hyperparameters are tuned afterwards by
@@ -134,11 +135,13 @@ class ModelSelectionAgent(BaseAgent):
             # 1-p_value would read as ~0% here by construction (Wilcoxon found no
             # significant difference — that's the whole reason arbitration fired).
             # That's confidence-that-this-model-beats-the-runner-up, not confidence
-            # in the final decision: the decision was made by reasoned LLM
-            # arbitration, not chance, so it gets the same fixed moderate
-            # confidence DataUnderstandingAgent uses for its own LLM-arbitrated
-            # picks — "reasoned but not statistically proven."
-            confidence = ARBITRATION_CONFIDENCE
+            # in the final decision. Instead, measure how clearly the tied top-2
+            # separate from the REST of the field (3rd place onward): arbitrating
+            # between two models that are both far ahead of every other candidate
+            # is a low-risk coin-flip, arbitrating in a field where five models are
+            # all bunched together is not — a real, computed distinction the flat
+            # p-value can't see.
+            confidence = self._confidence_from_field_separation(results, best_result)
         elif p_value is not None:
             confidence = float(min(0.99, 1 - p_value))
         else:
@@ -384,6 +387,29 @@ class ModelSelectionAgent(BaseAgent):
         # Normalize: a margin >= 0.05 (5 accuracy points, or 0.05 RMSE units) is
         # treated as a clearly confident win.
         return float(min(0.95, 0.5 + margin * 10))
+
+    def _confidence_from_field_separation(
+        self, results: List[Dict[str, Any]], best_result: Dict[str, Any]
+    ) -> float:
+        """
+        Confidence for an arbitrated tie, grounded in how far the tied top-2
+        (results[0] and results[1] — the pair Wilcoxon found indistinguishable)
+        lead the rest of the field, rather than a flat constant. A tied pair
+        that's still clearly ahead of every other candidate means arbitrating
+        between them is low-risk; a tie inside a tightly bunched field of many
+        similarly-scoring candidates is a much shakier ground to arbitrate on,
+        and this margin — unlike the Wilcoxon p-value, which is 0 by
+        construction for the tied pair itself — actually captures that.
+        """
+        tied_pair_names = {results[0]["model_name"], results[1]["model_name"]}
+        others = [r for r in results if r["model_name"] not in tied_pair_names]
+        if not others:
+            return ARBITRATION_CONFIDENCE_FLOOR
+        third_place_score = max(r["mean_score"] for r in others)
+        margin = best_result["mean_score"] - third_place_score
+        # Same scaling as _confidence_from_margin: a margin >= 0.05 (5 accuracy
+        # points, or 0.05 RMSE units) counts as a clearly separated tied pair.
+        return float(max(0.5, min(0.95, 0.5 + margin * 10)))
 
     def _compare_top_two(
         self, results: List[Dict[str, Any]]
