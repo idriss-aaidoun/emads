@@ -61,7 +61,10 @@ class ReportingAgent(BaseAgent):
             "evaluation_plots": state.get("evaluation_plots") or [],
             "explainability_summary": state.get("explainability_summary") or "No explanation available.",
             "shap_plots": state.get("shap_plots") or [],
+            "local_explanations": state.get("local_explanations") or [],
+            "explanation_agreement_score": state.get("explanation_agreement_score"),
             "agent_decisions": state.get("agent_decisions") or [],
+            "llm_arbitration_log": state.get("llm_arbitration_log") or [],
             "conclusion": executive_conclusion or "No conclusion available.",
         }
 

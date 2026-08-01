@@ -77,11 +77,22 @@ class EMADSState(TypedDict, total=False):
     shap_plots: Optional[List[str]]
     explainability_summary: Optional[str]
 
+    local_explanations: Optional[List[Dict[str, Any]]]
+    """Per-instance SHAP explanations for representative test observations."""
+
+    explanation_agreement_score: Optional[float]
+    """Spearman correlation between SHAP and Permutation Importance rankings —
+    used as the Explainability Agent's confidence."""
+
     report_path: Optional[str]
 
     agent_decisions: Annotated[List[AgentDecision], operator.add]
     logs: Annotated[List[str], operator.add]
     errors: Annotated[List[str], operator.add]
+
+    llm_arbitration_log: Annotated[List[Dict[str, Any]], operator.add]
+    """Records every time an agent escalated a decision to the LLM, with the
+    statistical trigger condition that caused it."""
 
 
 def create_initial_state(dataset_path: str, dataset_name: Optional[str] = None) -> EMADSState:
@@ -94,4 +105,5 @@ def create_initial_state(dataset_path: str, dataset_name: Optional[str] = None) 
         agent_decisions=[],
         logs=[],
         errors=[],
+        llm_arbitration_log=[],
     )

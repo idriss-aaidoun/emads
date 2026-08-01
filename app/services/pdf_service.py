@@ -54,6 +54,7 @@ class PDFService:
         story += self._build_evaluation_section(content_data)
         story += self._build_explainability_section(content_data)
         story += self._build_decisions_log(content_data)
+        story += self._build_arbitration_section(content_data)
         story += self._build_section("Conclusion", content_data.get("conclusion", ""))
 
         try:
@@ -155,6 +156,20 @@ class PDFService:
             confidence = f" (confidence: {d.confidence:.0%})" if d.confidence is not None else ""
             elements.append(Paragraph(
                 f"<b>[{escape(d.agent_name)}]</b> {escape(d.decision)}{confidence}<br/><i>{escape(d.reasoning)}</i>",
+                self.styles["Body"],
+            ))
+        return elements
+
+    def _build_arbitration_section(self, data: Dict[str, Any]) -> List[Any]:
+        entries = data.get("llm_arbitration_log") or []
+        if not entries:
+            return []
+        elements = [Paragraph("LLM Arbitration Log", self.styles["SectionTitle"])]
+        for entry in entries:
+            elements.append(Paragraph(
+                f"<b>[{escape(str(entry.get('agent_name', 'unknown')))}]</b> "
+                f"Trigger: {escape(str(entry.get('trigger', '')))}"
+                f"<br/><i>{escape(str(entry.get('llm_arbitration', '')))}</i>",
                 self.styles["Body"],
             ))
         return elements

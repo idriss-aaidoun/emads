@@ -8,6 +8,7 @@ Cross Validation scores on top of the V1 metrics, and generates the
 confusion matrix / ROC curve figures for the report.
 """
 
+import math
 import pickle
 import numpy as np
 import pandas as pd
@@ -79,6 +80,10 @@ class EvaluationAgent(BaseAgent):
             # Cross-validation on the training set, for a stability check beyond
             # a single train/test split.
             cv_mean, cv_std = self._cross_validate(model, X_train, y_train, problem_type)
+            # 95% CI on the CV mean — quantifies how much the reported score
+            # could shift on a different train/test split, not just its spread.
+            margin = 1.96 * cv_std / math.sqrt(CV_FOLDS)
+            ci_lower, ci_upper = cv_mean - margin, cv_mean + margin
 
             if problem_type == "regression":
                 metrics_payload = {
@@ -88,6 +93,8 @@ class EvaluationAgent(BaseAgent):
                     "r2": float(r2_score(y_test, y_pred)),
                     "cv_mean_neg_rmse": cv_mean,
                     "cv_std_neg_rmse": cv_std,
+                    "cv_ci_lower": ci_lower,
+                    "cv_ci_upper": ci_upper,
                 }
             else:
                 accuracy = float(accuracy_score(y_test, y_pred))
@@ -111,6 +118,8 @@ class EvaluationAgent(BaseAgent):
                     "confusion_matrix": cm,
                     "cv_mean_accuracy": cv_mean,
                     "cv_std_accuracy": cv_std,
+                    "cv_ci_lower": ci_lower,
+                    "cv_ci_upper": ci_upper,
                 }
 
             permutation_importance_payload = self._compute_permutation_importance(
@@ -267,8 +276,10 @@ class EvaluationAgent(BaseAgent):
             verdict = "The gap between the test score and CV score suggests possible overfitting or an unrepresentative test split."
         else:
             verdict = "The test score is consistent with the cross-validation score, suggesting the model generalizes reliably."
+        ci_lower, ci_upper = metrics.get("cv_ci_lower"), metrics.get("cv_ci_upper")
+        ci_text = f" (95% CI: [{ci_lower:.4f}, {ci_upper:.4f}])" if ci_lower is not None else ""
         reasoning = (
-            f"Test score: {test_score:.4f}. Cross-validation: {cv_mean:.4f} ± {cv_std:.4f} "
+            f"Test score: {test_score:.4f}. Cross-validation: {cv_mean:.4f} ± {cv_std:.4f}{ci_text} "
             f"across {CV_FOLDS} folds. {verdict}"
         )
         return reasoning, gap

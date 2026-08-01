@@ -259,7 +259,7 @@ def _merge_stream_update(current_state: dict, update: dict) -> dict:
     """Applies streamed LangGraph updates while preserving accumulator fields."""
     merged = dict(current_state)
     for key, value in update.items():
-        if key in {"agent_decisions", "logs", "errors"}:
+        if key in {"agent_decisions", "logs", "errors", "llm_arbitration_log"}:
             merged[key] = [*(merged.get(key) or []), *(value or [])]
         else:
             merged[key] = value
@@ -362,9 +362,12 @@ def render_evaluation_tab(state: dict) -> None:
         metric_card(c4, "F1-score", f"{metrics.get('f1_score', 0):.3f}")
         if metrics.get("roc_auc") is not None:
             st.metric("ROC AUC", f"{metrics['roc_auc']:.3f}")
+        ci_caption = ""
+        if metrics.get("cv_ci_lower") is not None:
+            ci_caption = f" (95% CI: [{metrics['cv_ci_lower']:.3f}, {metrics['cv_ci_upper']:.3f}])"
         st.caption(
             f"Cross-validation: {metrics.get('cv_mean_accuracy', 0):.3f} "
-            f"± {metrics.get('cv_std_accuracy', 0):.3f}"
+            f"± {metrics.get('cv_std_accuracy', 0):.3f}{ci_caption}"
         )
     elif "silhouette_score" in metrics:
         c1, c2, c3 = st.columns(3)
@@ -386,6 +389,12 @@ def render_evaluation_tab(state: dict) -> None:
         metric_card(c2, "MSE", f"{metrics.get('mse', 0):.3f}")
         metric_card(c3, "RMSE", f"{metrics.get('rmse', 0):.3f}")
         metric_card(c4, "R²", f"{metrics.get('r2', 0):.3f}")
+        if metrics.get("cv_ci_lower") is not None:
+            st.caption(
+                f"Cross-validation (neg RMSE): {metrics.get('cv_mean_neg_rmse', 0):.3f} "
+                f"± {metrics.get('cv_std_neg_rmse', 0):.3f} "
+                f"(95% CI: [{metrics['cv_ci_lower']:.3f}, {metrics['cv_ci_upper']:.3f}])"
+            )
 
     plots = [p for p in (state.get("evaluation_plots") or []) if os.path.exists(p)]
     if plots:
@@ -431,6 +440,44 @@ def render_explainability_tab(state: dict) -> None:
     for p in (state.get("shap_plots") or []):
         if os.path.exists(p):
             st.image(p, use_container_width=True)
+
+    perm_importance = state.get("permutation_importance") or {}
+    if perm_importance:
+        section_title("Permutation Importance (held-out test set)")
+        df_perm = pd.DataFrame(list(perm_importance.items())[:10], columns=["Feature", "Importance"])
+        st.bar_chart(df_perm.set_index("Feature"))
+
+    agreement_score = state.get("explanation_agreement_score")
+    if agreement_score is not None:
+        st.metric("SHAP / Permutation Agreement (Spearman)", f"{agreement_score:.3f}")
+
+    local_explanations = state.get("local_explanations") or []
+    if local_explanations:
+        section_title("Local Explanations (representative test observations)")
+        for entry in local_explanations:
+            label = f"Row {entry.get('row_index')} — actual={entry.get('actual')}, predicted={entry.get('predicted')}"
+            if entry.get("misclassified"):
+                label += " ⚠️ mispredicted"
+            st.caption(label)
+            plot_path = entry.get("plot_path")
+            if plot_path and os.path.exists(plot_path):
+                st.image(plot_path, use_container_width=True)
+
+
+def render_arbitration_tab(state: dict) -> None:
+    section_title("🧭 LLM Arbitration Log")
+    entries = state.get("llm_arbitration_log") or []
+    if not entries:
+        st.info("No LLM arbitration was triggered for this run — every statistical trigger stayed within its normal range.")
+        return
+    for entry in entries:
+        st.markdown(f"""
+            <div class="decision-card">
+                <span class="decision-agent">{entry.get('agent_name', 'unknown')}</span>
+                <div><b>Trigger:</b> {entry.get('trigger', '')}</div>
+                <div class="decision-reason">{entry.get('llm_arbitration', '')}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
 
 def render_decisions_tab(state: dict) -> None:
@@ -482,7 +529,7 @@ def main() -> None:
         state = st.session_state["final_state"]
         tabs = st.tabs([
             "🏠 Overview", "📊 EDA", "🧹 Preprocessing", "🏆 Model",
-            "📈 Evaluation", "💡 Explainability", "🧾 Decisions Log", "📄 Report",
+            "📈 Evaluation", "💡 Explainability", "🧭 Arbitrage LLM", "🧾 Decisions Log", "📄 Report",
         ])
         with tabs[0]: render_overview_tab(state)
         with tabs[1]: render_eda_tab(state)
@@ -490,8 +537,9 @@ def main() -> None:
         with tabs[3]: render_model_tab(state)
         with tabs[4]: render_evaluation_tab(state)
         with tabs[5]: render_explainability_tab(state)
-        with tabs[6]: render_decisions_tab(state)
-        with tabs[7]: render_report_tab(state)
+        with tabs[6]: render_arbitration_tab(state)
+        with tabs[7]: render_decisions_tab(state)
+        with tabs[8]: render_report_tab(state)
     elif not run_clicked:
         st.info("👈 Upload a dataset and click **Run EMADS Pipeline** to get started.")
 

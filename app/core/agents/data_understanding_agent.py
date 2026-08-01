@@ -12,10 +12,16 @@ picks up from here to generate visual + LLM explanations.
 """
 
 import pandas as pd
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, AgentDecision, UNSUPERVISED_PROBLEM_TYPES
+from app.services.llm_service import LLMService
+
+# Below this confidence, the fallback "last column" heuristic is treated as
+# too uncertain to trust silently — the LLM is asked to suggest a more
+# plausible target from the column names before falling back to it.
+TARGET_ARBITRATION_THRESHOLD = 0.5
 
 # Column names commonly used for the target variable — helps the heuristic
 # below make a better guess than "always pick the last column".
@@ -46,8 +52,9 @@ class DataUnderstandingAgent(BaseAgent):
     problem type, and data quality warnings.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, llm_service: Optional[LLMService] = None) -> None:
         super().__init__(name="data_understanding_agent")
+        self.llm = llm_service if llm_service else LLMService()
 
     def execute(self, state: EMADSState) -> PartialEMADSState:
         self.logger.info("execute() started")
@@ -66,6 +73,7 @@ class DataUnderstandingAgent(BaseAgent):
         numerical_columns = [c for c, p in columns_profile.items() if p["is_numeric"]]
         categorical_columns = [c for c, p in columns_profile.items() if not p["is_numeric"]]
 
+        arbitration_entry = None
         user_problem_type = state.get("problem_type")
         if user_problem_type in UNSUPERVISED_PROBLEM_TYPES:
             # Opt-in only: unlike classification vs. regression, nothing in a raw
@@ -84,7 +92,7 @@ class DataUnderstandingAgent(BaseAgent):
                 confidence=1.0,
             )
         else:
-            target_column, target_decision = self._resolve_target_column(
+            target_column, target_decision, arbitration_entry = self._resolve_target_column(
                 df, user_target, categorical_columns, numerical_columns
             )
             problem_type, problem_decision = self._infer_problem_type(df, target_column, user_problem_type)
@@ -109,6 +117,7 @@ class DataUnderstandingAgent(BaseAgent):
             "target_column": target_column,
             "problem_type": problem_type,
             "agent_decisions": [target_decision, problem_decision],
+            "llm_arbitration_log": [arbitration_entry] if arbitration_entry else [],
             "logs": [self.log(
                 f"Analyzed {df.shape[0]} rows / {df.shape[1]} columns. "
                 f"Target='{target_column}', problem_type='{problem_type}'."
@@ -161,20 +170,24 @@ class DataUnderstandingAgent(BaseAgent):
         user_target: str | None,
         categorical_columns: List[str],
         numerical_columns: List[str],
-    ) -> tuple[str, AgentDecision]:
+    ) -> tuple[str, AgentDecision, Dict[str, Any] | None]:
         """
         Decides which column is the target. Priority:
           1. User-provided target (if it exists in the dataset)
           2. A column whose name matches a common target name
-          3. Fallback: the last column of the dataset
-        Every path is explained via an AgentDecision.
+          3. Fallback: the last column of the dataset — if this fallback's
+             confidence is too low to trust silently, the LLM is asked to
+             suggest a more plausible target from the column names before
+             committing to it.
+        Every path is explained via an AgentDecision. Returns an optional
+        llm_arbitration_log entry (None unless the LLM was actually consulted).
         """
         if user_target and user_target in df.columns:
             return user_target, self.decide(
                 decision=f"Use user-specified target column '{user_target}'",
                 reasoning="The target column was explicitly provided in the state.",
                 confidence=1.0,
-            )
+            ), None
 
         name_matches = [col for col in df.columns if col.strip().lower() in COMMON_TARGET_NAMES]
         if name_matches:
@@ -192,7 +205,7 @@ class DataUnderstandingAgent(BaseAgent):
                 decision=f"Selected '{col}' as target column",
                 reasoning=reasoning,
                 confidence=confidence,
-            )
+            ), None
 
         fallback = str(df.columns[-1])
         # A low unique/row ratio looks target-like (a handful of repeated
@@ -200,6 +213,10 @@ class DataUnderstandingAgent(BaseAgent):
         n_rows = len(df)
         unique_ratio = df[fallback].nunique(dropna=True) / n_rows if n_rows else 1.0
         confidence = max(0.15, min(0.55, 0.55 - unique_ratio * 0.4))
+
+        if confidence < TARGET_ARBITRATION_THRESHOLD:
+            return self._arbitrate_target_column(df, fallback, unique_ratio, confidence)
+
         return fallback, self.decide(
             decision=f"Selected '{fallback}' as target column (fallback)",
             reasoning=(
@@ -209,7 +226,59 @@ class DataUnderstandingAgent(BaseAgent):
                 "confirmed by the user."
             ),
             confidence=confidence,
+        ), None
+
+    def _arbitrate_target_column(
+        self, df: pd.DataFrame, fallback: str, unique_ratio: float, fallback_confidence: float
+    ) -> tuple[str, AgentDecision, Dict[str, Any]]:
+        """Asks the LLM to suggest a more plausible target column from the
+        dataset's column names when the "last column" fallback's confidence
+        is too low to trust silently. Only used if the LLM's answer is a real
+        column in the dataset — an unusable answer just keeps the fallback."""
+        columns_list = list(df.columns)
+        suggestion = self.llm.generate_summary(
+            system_prompt=(
+                "You are a senior data scientist. Given a list of column names from a "
+                "tabular dataset, respond with ONLY the single column name that is most "
+                "plausible as the machine learning target variable. No explanation, no "
+                "punctuation, no surrounding text — just the column name."
+            ),
+            user_prompt=f"Column names: {columns_list}",
+            fallback_message=fallback,
         )
+        suggested_column = (suggestion or "").strip()
+
+        arbitration_entry = {
+            "agent_name": self.name,
+            "trigger": "target confidence below 0.5",
+            "llm_arbitration": suggestion,
+        }
+
+        if suggested_column and suggested_column in df.columns:
+            return suggested_column, self.decide(
+                decision=f"Selected '{suggested_column}' as target column (LLM arbitration)",
+                reasoning=(
+                    f"The fallback heuristic (last column '{fallback}', unique/row ratio="
+                    f"{unique_ratio:.2f}) only reached confidence={fallback_confidence:.2f}, below the "
+                    f"{TARGET_ARBITRATION_THRESHOLD} threshold for trusting it silently. The LLM was "
+                    f"asked to suggest a more plausible target from the column names and proposed "
+                    f"'{suggested_column}', which is a real column in the dataset — used instead. "
+                    "This should still be confirmed by the user."
+                ),
+                confidence=0.6,
+            ), arbitration_entry
+
+        return fallback, self.decide(
+            decision=f"Selected '{fallback}' as target column (fallback)",
+            reasoning=(
+                "No target was specified and no column matched a common target name, so the "
+                f"last column of the dataset was assumed to be the target (unique/row ratio="
+                f"{unique_ratio:.2f}, confidence={fallback_confidence:.2f}). LLM arbitration was "
+                f"attempted but returned no usable column name ('{suggested_column}'), so the "
+                "fallback was kept. This should be confirmed by the user."
+            ),
+            confidence=fallback_confidence,
+        ), arbitration_entry
 
     def _skip_target_for_unsupervised(
         self, user_target: str | None, problem_type: str

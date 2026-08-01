@@ -14,7 +14,8 @@ breaks because of an optional dependency.
 
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from scipy.stats import wilcoxon
 
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -120,10 +121,18 @@ class ModelSelectionAgent(BaseAgent):
         best_model_name = best_result["model_name"]
         best_model = candidates[best_model_name]
 
+        p_value, arbitration_entry = self._compare_top_two(results)
+        reasoning = self._build_reasoning(best_result, results, scoring)
+        if p_value is not None:
+            reasoning += self._build_significance_note(p_value, results, arbitration_entry)
+        confidence = (
+            float(min(0.99, 1 - p_value)) if p_value is not None
+            else self._confidence_from_margin(results)
+        )
         selection_decision = self.decide(
             decision=f"Selected '{best_model_name}' as the final model",
-            reasoning=self._build_reasoning(best_result, results, scoring),
-            confidence=self._confidence_from_margin(results),
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
         self.logger.info(
@@ -158,6 +167,7 @@ class ModelSelectionAgent(BaseAgent):
             "selected_model_name": best_model_name,
             "model_selection_summary": model_selection_summary,
             "agent_decisions": [selection_decision],
+            "llm_arbitration_log": [arbitration_entry] if arbitration_entry else [],
             "logs": [self.log(
                 f"Compared {len(candidates)} model(s) via "
                 f"{'a single unsupervised fit' if is_unsupervised else f'{CV_FOLDS}-fold CV'}. "
@@ -221,6 +231,7 @@ class ModelSelectionAgent(BaseAgent):
                     "mean_score": mean_s,
                     "std_score": std_s,
                     "scoring_metric": scoring,
+                    "fold_scores": [float(s) for s in scores],
                 })
             except Exception as exc:
                 self.logger.warning("CV failed for model=%s error=%s", model_name, exc)
@@ -320,9 +331,13 @@ class ModelSelectionAgent(BaseAgent):
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
         """
-        Confidence reflects how clearly the winner beat the runner-up, not
-        just the raw score. A close race between the top 2 models means the
-        choice is less "confident" even if the winning score is high.
+        Fallback confidence for comparisons the Wilcoxon test in
+        _compare_top_two() cannot cover — a single candidate, or the
+        unsupervised branch, which fits once instead of via k-fold CV and so
+        has no per-fold scores to run a signed-rank test on. Reflects how
+        clearly the winner beat the runner-up, not just the raw score: a
+        close race between the top 2 models means the choice is less
+        "confident" even if the winning score is high.
         """
         if len(results) < 2:
             return 0.9
@@ -331,3 +346,84 @@ class ModelSelectionAgent(BaseAgent):
         # Normalize: a margin >= 0.05 (5 accuracy points, or 0.05 RMSE units) is
         # treated as a clearly confident win.
         return float(min(0.95, 0.5 + margin * 10))
+
+    def _compare_top_two(
+        self, results: List[Dict[str, Any]]
+    ) -> tuple[Optional[float], Optional[Dict[str, Any]]]:
+        """
+        Statistically tests whether the winning model actually beat the
+        runner-up, rather than trusting a mean-score ranking that CV noise
+        alone can produce. Only applicable when both models have per-fold
+        scores (the supervised branch's k-fold CV) — the unsupervised branch
+        fits once on the full dataset and has no folds to compare.
+
+        If the test finds no significant difference (p > 0.05), arbitration
+        is escalated to the LLM on interpretability/cost grounds, since
+        performance alone can no longer break the tie.
+        """
+        if len(results) < 2:
+            return None, None
+        best_result, second_result = results[0], results[1]
+        best_folds = best_result.get("fold_scores")
+        second_folds = second_result.get("fold_scores")
+        if not best_folds or not second_folds or len(best_folds) < 2 or len(second_folds) < 2:
+            return None, None
+
+        try:
+            _, p_value = wilcoxon(best_folds, second_folds)
+            p_value = float(p_value)
+        except ValueError:
+            # wilcoxon raises when all paired differences are zero (identical
+            # scores on every fold) — that IS "no significant difference".
+            p_value = 1.0
+
+        arbitration_entry = None
+        if p_value > 0.05:
+            self.logger.info(
+                "Wilcoxon p=%.4f between '%s' and '%s' — no significant difference, escalating to LLM.",
+                p_value, best_result["model_name"], second_result["model_name"],
+            )
+            arbitration_response = self.llm.generate_summary(
+                system_prompt=(
+                    "You are a senior machine learning engineer. Two candidate models achieved "
+                    "statistically indistinguishable cross-validation scores (Wilcoxon signed-rank "
+                    "test, p > 0.05) — performance cannot break the tie. Arbitrate between them "
+                    "using ONLY interpretability and computational cost. Answer in 2-4 concise "
+                    "sentences with a clear recommendation and justification."
+                ),
+                user_prompt=(
+                    f"Model A: {best_result['model_name']} (mean {best_result['scoring_metric']}="
+                    f"{best_result['mean_score']:.4f})\n"
+                    f"Model B: {second_result['model_name']} (mean {second_result['scoring_metric']}="
+                    f"{second_result['mean_score']:.4f})\n"
+                    f"Wilcoxon p-value: {p_value:.4f}\n\n"
+                    "Which would you recommend and why, based on interpretability and cost alone?"
+                ),
+                fallback_message=(
+                    f"No statistically significant difference between '{best_result['model_name']}' "
+                    f"and '{second_result['model_name']}' (p={p_value:.3f}). Manual review of "
+                    "interpretability and computational cost is recommended before committing to one."
+                ),
+            )
+            arbitration_entry = {
+                "agent_name": self.name,
+                "trigger": f"Wilcoxon p={p_value:.3f} (no significant difference)",
+                "llm_arbitration": arbitration_response,
+            }
+        return p_value, arbitration_entry
+
+    def _build_significance_note(
+        self, p_value: float, results: List[Dict[str, Any]], arbitration_entry: Optional[Dict[str, Any]]
+    ) -> str:
+        second_model_name = results[1]["model_name"]
+        if arbitration_entry:
+            return (
+                f" A Wilcoxon signed-rank test on the per-fold scores against the runner-up "
+                f"('{second_model_name}') found no statistically significant difference (p={p_value:.3f}), "
+                f"so an LLM arbitrated between them on interpretability/cost: "
+                f"{arbitration_entry['llm_arbitration']}"
+            )
+        return (
+            f" A Wilcoxon signed-rank test on the per-fold scores confirms this winner over the "
+            f"runner-up ('{second_model_name}') is statistically significant (p={p_value:.3f})."
+        )
