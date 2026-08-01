@@ -117,14 +117,13 @@ class ModelSelectionAgent(BaseAgent):
             results = self._score_candidates_supervised(candidates, X_train, y_train, cv, scoring)
 
         results.sort(key=lambda r: r["mean_score"], reverse=True)
-        best_result = results[0]
+        p_value, arbitration_entry, best_result = self._compare_top_two(results)
         best_model_name = best_result["model_name"]
         best_model = candidates[best_model_name]
 
-        p_value, arbitration_entry = self._compare_top_two(results)
         reasoning = self._build_reasoning(best_result, results, scoring)
         if p_value is not None:
-            reasoning += self._build_significance_note(p_value, results, arbitration_entry)
+            reasoning += self._build_significance_note(p_value, results, arbitration_entry, best_model_name)
         confidence = (
             float(min(0.99, 1 - p_value)) if p_value is not None
             else self._confidence_from_margin(results)
@@ -139,14 +138,26 @@ class ModelSelectionAgent(BaseAgent):
             "Calling LLM for model selection summary (model=%s)",
             getattr(self.llm, "model_name", "unknown"),
         )
-        fallback_summary = self._build_fallback_summary(best_model_name, best_result, results, scoring)
+        # If arbitration already broke a statistical tie, the narrative call is told so
+        # explicitly — otherwise it independently "explains" a tie as if one candidate
+        # clearly outscored the other, which contradicts the arbitration log.
+        other_result = results[1] if best_result is results[0] else results[0]
+        tie_note = (
+            f"Note: '{best_model_name}' and '{other_result['model_name']}' were statistically tied "
+            f"(Wilcoxon p={p_value:.3f}); '{best_model_name}' was selected because an LLM arbitration "
+            "recommended it on interpretability/computational-cost grounds, not because of a real "
+            "performance gap."
+        ) if arbitration_entry else None
+        fallback_summary = self._build_fallback_summary(best_model_name, best_result, results, scoring, tie_note)
         model_selection_summary = self.llm.generate_summary(
             system_prompt=(
                 "You are a senior machine learning engineer. Explain in 4-6 concise bullet points "
                 "why a particular model was selected over the alternatives, using the comparison "
-                "results and the confidence in the choice. Be clear and non-technical."
+                "results and the confidence in the choice. Be clear and non-technical. If told the "
+                "top candidates were statistically tied, say so plainly instead of inventing a "
+                "performance-based distinction that isn't there."
             ),
-            user_prompt=self._build_llm_prompt(best_model_name, best_result, results, scoring),
+            user_prompt=self._build_llm_prompt(best_model_name, best_result, results, scoring, tie_note),
             fallback_message=fallback_summary,
         )
         if not (model_selection_summary or "").strip():
@@ -302,32 +313,44 @@ class ModelSelectionAgent(BaseAgent):
             f"Other candidates scored: {comparison}."
         )
 
-    def _build_llm_prompt(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
+    def _build_llm_prompt(
+        self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]],
+        scoring: str, tie_note: str | None = None,
+    ) -> str:
         metric_label = METRIC_LABELS.get(scoring, scoring)
         top_rows = []
         for result in sorted(all_results, key=lambda r: r["mean_score"], reverse=True)[:5]:
             top_rows.append(
                 f"- {result['model_name']}: mean {metric_label}={result['mean_score']:.4f}, std={result['std_score']:.4f}"
             )
-        return (
+        prompt = (
             f"Best model: {best_model_name}\n"
             f"Winning score: {best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}\n"
             f"Metric: {metric_label}\n\n"
             f"Candidate comparison:\n{chr(10).join(top_rows)}\n\n"
-            "Explain why the selected model is preferable and mention any caveats about close competition."
         )
+        if tie_note:
+            prompt += f"{tie_note}\n\n"
+        prompt += "Explain why the selected model is preferable and mention any caveats about close competition."
+        return prompt
 
-    def _build_fallback_summary(self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]], scoring: str) -> str:
+    def _build_fallback_summary(
+        self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]],
+        scoring: str, tie_note: str | None = None,
+    ) -> str:
         metric_label = METRIC_LABELS.get(scoring, scoring)
         others = [r for r in all_results if r["model_name"] != best_model_name]
         comparison = ", ".join(f"{r['model_name']}={r['mean_score']:.4f}" for r in others[:4]) or "no alternatives recorded"
         method = "a single fit on the full dataset" if scoring == "silhouette" else "cross-validation"
-        return (
+        bullets = [
             f"* **Selected Model**: `{best_model_name}` was chosen because it achieved the best mean {metric_label} "
-            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) via {method}.\n"
-            f"* **Comparison**: Competing models scored: {comparison}.\n"
-            "* **Caution**: If the margin is small, the choice should be validated further on fresh data before deployment."
-        )
+            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) via {method}.",
+            f"* **Comparison**: Competing models scored: {comparison}.",
+        ]
+        if tie_note:
+            bullets.append(f"* **Statistical Tie**: {tie_note}")
+        bullets.append("* **Caution**: If the margin is small, the choice should be validated further on fresh data before deployment.")
+        return "\n".join(bullets)
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
         """
@@ -349,7 +372,7 @@ class ModelSelectionAgent(BaseAgent):
 
     def _compare_top_two(
         self, results: List[Dict[str, Any]]
-    ) -> tuple[Optional[float], Optional[Dict[str, Any]]]:
+    ) -> tuple[Optional[float], Optional[Dict[str, Any]], Dict[str, Any]]:
         """
         Statistically tests whether the winning model actually beat the
         runner-up, rather than trusting a mean-score ranking that CV noise
@@ -359,15 +382,25 @@ class ModelSelectionAgent(BaseAgent):
 
         If the test finds no significant difference (p > 0.05), arbitration
         is escalated to the LLM on interpretability/cost grounds, since
-        performance alone can no longer break the tie.
+        performance alone can no longer break the tie — and the LLM's
+        recommendation actually decides the winner returned here. Asking for
+        arbitration and then ignoring its answer would leave the pipeline's
+        choice as an arbitrary artifact of dict insertion order, while a
+        separate narrative LLM call independently invents its own
+        justification for that same arbitrary pick — exactly the kind of
+        self-contradictory explanation this project exists to avoid.
+
+        Always returns a winner (results[0] when no arbitration happened or
+        it couldn't be parsed) alongside the p-value and arbitration log
+        entry, both of which are None when Wilcoxon wasn't applicable.
         """
         if len(results) < 2:
-            return None, None
+            return None, None, results[0] if results else None
         best_result, second_result = results[0], results[1]
         best_folds = best_result.get("fold_scores")
         second_folds = second_result.get("fold_scores")
         if not best_folds or not second_folds or len(best_folds) < 2 or len(second_folds) < 2:
-            return None, None
+            return None, None, best_result
 
         try:
             _, p_value = wilcoxon(best_folds, second_folds)
@@ -378,6 +411,7 @@ class ModelSelectionAgent(BaseAgent):
             p_value = 1.0
 
         arbitration_entry = None
+        winner = best_result
         if p_value > 0.05:
             self.logger.info(
                 "Wilcoxon p=%.4f between '%s' and '%s' — no significant difference, escalating to LLM.",
@@ -389,12 +423,13 @@ class ModelSelectionAgent(BaseAgent):
                     "statistically indistinguishable cross-validation scores (Wilcoxon signed-rank "
                     "test, p > 0.05) — performance cannot break the tie. Arbitrate between them "
                     "using ONLY interpretability and computational cost. Answer in 2-4 concise "
-                    "sentences with a clear recommendation and justification."
+                    "sentences with a clear recommendation, using the model's real name (not "
+                    "'Model A'/'Model B') when you state it, and a justification."
                 ),
                 user_prompt=(
-                    f"Model A: {best_result['model_name']} (mean {best_result['scoring_metric']}="
+                    f"Model A — {best_result['model_name']} (mean {best_result['scoring_metric']}="
                     f"{best_result['mean_score']:.4f})\n"
-                    f"Model B: {second_result['model_name']} (mean {second_result['scoring_metric']}="
+                    f"Model B — {second_result['model_name']} (mean {second_result['scoring_metric']}="
                     f"{second_result['mean_score']:.4f})\n"
                     f"Wilcoxon p-value: {p_value:.4f}\n\n"
                     "Which would you recommend and why, based on interpretability and cost alone?"
@@ -402,28 +437,67 @@ class ModelSelectionAgent(BaseAgent):
                 fallback_message=(
                     f"No statistically significant difference between '{best_result['model_name']}' "
                     f"and '{second_result['model_name']}' (p={p_value:.3f}). Manual review of "
-                    "interpretability and computational cost is recommended before committing to one."
+                    "interpretability and computational cost is recommended; defaulting to "
+                    f"'{best_result['model_name']}' — recommend {best_result['model_name']}."
                 ),
             )
+            recommended_name = self._parse_arbitration_recommendation(
+                arbitration_response, best_result["model_name"], second_result["model_name"]
+            )
+            if recommended_name == second_result["model_name"]:
+                winner = second_result
+                self.logger.info(
+                    "LLM arbitration recommended '%s' over the tie-break default — switching selection.",
+                    recommended_name,
+                )
+            elif recommended_name is None:
+                self.logger.warning(
+                    "LLM arbitration response did not clearly recommend either model; keeping '%s'.",
+                    best_result["model_name"],
+                )
             arbitration_entry = {
                 "agent_name": self.name,
                 "trigger": f"Wilcoxon p={p_value:.3f} (no significant difference)",
                 "llm_arbitration": arbitration_response,
             }
-        return p_value, arbitration_entry
+        return p_value, arbitration_entry, winner
+
+    def _parse_arbitration_recommendation(self, response: str, name_a: str, name_b: str) -> Optional[str]:
+        """
+        Finds which of the two candidate names the arbitration response
+        actually recommends, by locating whichever name appears first after
+        the word "recommend" — robust to free-form LLM phrasing (e.g. "I'd
+        recommend Model B: RandomForest") instead of requiring a strict
+        output format the LLM might not follow. Returns None if neither name
+        can be found, so the caller can fall back to the original tie-break
+        instead of guessing.
+        """
+        if not response:
+            return None
+        lowered = response.lower()
+        idx = lowered.find("recommend")
+        search_region = lowered[idx:] if idx != -1 else lowered
+        pos_a = search_region.find(name_a.lower())
+        pos_b = search_region.find(name_b.lower())
+        if pos_a == -1 and pos_b == -1:
+            return None
+        if pos_b != -1 and (pos_a == -1 or pos_b < pos_a):
+            return name_b
+        return name_a
 
     def _build_significance_note(
-        self, p_value: float, results: List[Dict[str, Any]], arbitration_entry: Optional[Dict[str, Any]]
+        self, p_value: float, results: List[Dict[str, Any]],
+        arbitration_entry: Optional[Dict[str, Any]], final_model_name: str,
     ) -> str:
-        second_model_name = results[1]["model_name"]
+        other_name = results[1]["model_name"] if results[0]["model_name"] == final_model_name else results[0]["model_name"]
         if arbitration_entry:
             return (
-                f" A Wilcoxon signed-rank test on the per-fold scores against the runner-up "
-                f"('{second_model_name}') found no statistically significant difference (p={p_value:.3f}), "
-                f"so an LLM arbitrated between them on interpretability/cost: "
-                f"{arbitration_entry['llm_arbitration']}"
+                f" A Wilcoxon signed-rank test on the per-fold scores found no statistically significant "
+                f"difference between '{final_model_name}' and '{other_name}' (p={p_value:.3f}), so the tie "
+                f"was broken by LLM arbitration on interpretability/cost, which recommended "
+                f"'{final_model_name}': {arbitration_entry['llm_arbitration']}"
             )
         return (
             f" A Wilcoxon signed-rank test on the per-fold scores confirms this winner over the "
-            f"runner-up ('{second_model_name}') is statistically significant (p={p_value:.3f})."
+            f"runner-up ('{other_name}') is statistically significant (p={p_value:.3f})."
         )
