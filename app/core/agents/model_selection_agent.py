@@ -32,6 +32,12 @@ from app.services.llm_service import LLMService
 CV_FOLDS = 5
 RANDOM_STATE = 42
 
+# Confidence for a selection resolved by LLM arbitration (Wilcoxon tie) —
+# matches DataUnderstandingAgent's own LLM-arbitration confidence, so the
+# project has one consistent value for "reasoned but not statistically
+# proven" across agents, instead of each inventing its own number.
+ARBITRATION_CONFIDENCE = 0.6
+
 # Default configs used ONLY for the family-vs-family comparison below — the
 # winning algorithm's real hyperparameters are tuned afterwards by
 # HyperparameterAgent. eps=0.5 is workable because PreprocessingAgent already
@@ -124,10 +130,19 @@ class ModelSelectionAgent(BaseAgent):
         reasoning = self._build_reasoning(best_result, results, scoring)
         if p_value is not None:
             reasoning += self._build_significance_note(p_value, results, arbitration_entry, best_model_name)
-        confidence = (
-            float(min(0.99, 1 - p_value)) if p_value is not None
-            else self._confidence_from_margin(results)
-        )
+        if arbitration_entry:
+            # 1-p_value would read as ~0% here by construction (Wilcoxon found no
+            # significant difference — that's the whole reason arbitration fired).
+            # That's confidence-that-this-model-beats-the-runner-up, not confidence
+            # in the final decision: the decision was made by reasoned LLM
+            # arbitration, not chance, so it gets the same fixed moderate
+            # confidence DataUnderstandingAgent uses for its own LLM-arbitrated
+            # picks — "reasoned but not statistically proven."
+            confidence = ARBITRATION_CONFIDENCE
+        elif p_value is not None:
+            confidence = float(min(0.99, 1 - p_value))
+        else:
+            confidence = self._confidence_from_margin(results)
         selection_decision = self.decide(
             decision=f"Selected '{best_model_name}' as the final model",
             reasoning=reasoning,
