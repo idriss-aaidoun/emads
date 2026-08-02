@@ -53,6 +53,7 @@ class PDFService:
         story += self._build_model_section(content_data)
         story += self._build_evaluation_section(content_data)
         story += self._build_explainability_section(content_data)
+        story += self._build_local_explanations_section(content_data)
         story += self._build_decisions_log(content_data)
         story += self._build_arbitration_section(content_data)
         story += self._build_section("Conclusion", content_data.get("conclusion", ""))
@@ -110,7 +111,14 @@ class PDFService:
         if results:
             table_data = [["Model", "Mean Score", "Std Dev"]]
             for r in results:
-                table_data.append([r["model_name"], f"{r['mean_score']:.4f}", f"{r['std_score']:.4f}"])
+                # A candidate that raised during scoring is recorded with
+                # mean_score=-inf (see ModelSelectionAgent._score_candidates_
+                # supervised) rather than being dropped, so it still shows up
+                # here — render that plainly instead of a confusing "-inf".
+                failed = r["mean_score"] == float("-inf")
+                score_display = "Failed" if failed else f"{r['mean_score']:.4f}"
+                std_display = "-" if failed else f"{r['std_score']:.4f}"
+                table_data.append([r["model_name"], score_display, std_display])
             elements.append(self._styled_table(table_data))
             elements.append(Spacer(1, 0.3 * cm))
 
@@ -145,6 +153,28 @@ class PDFService:
         explainability_text = data.get("explainability_summary") or "No explanation available."
         elements = self._build_section("Explainability", explainability_text)
         elements += self._embed_images(data.get("shap_plots", []))
+        return elements
+
+    def _build_local_explanations_section(self, data: Dict[str, Any]) -> List[Any]:
+        # ExplainabilityAgent computes these (per-row SHAP waterfall plots on
+        # the held-out test set, including a mispredicted example where
+        # possible) and ReportingAgent forwards them into the payload, but
+        # nothing rendered them into the PDF before — only the Streamlit UI
+        # showed them, so anyone reading just the report never saw this part
+        # of the pipeline's output.
+        local_explanations = data.get("local_explanations") or []
+        if not local_explanations:
+            return []
+        elements = [Paragraph("Local Explanations", self.styles["SectionTitle"])]
+        for explanation in local_explanations:
+            label = "Mispredicted example" if explanation.get("misclassified") else "Example prediction"
+            elements.append(Paragraph(
+                f"<b>{label}</b> (row {explanation.get('row_index')}): "
+                f"actual={escape(str(explanation.get('actual')))}, "
+                f"predicted={escape(str(explanation.get('predicted')))}",
+                self.styles["Body"],
+            ))
+            elements += self._embed_images([explanation.get("plot_path")])
         return elements
 
     def _build_decisions_log(self, data: Dict[str, Any]) -> List[Any]:

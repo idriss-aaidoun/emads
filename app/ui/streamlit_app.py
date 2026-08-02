@@ -524,6 +524,12 @@ def main() -> None:
         final_state = run_pipeline_with_progress(local_path, target_column, problem_type)
         if final_state:
             st.session_state["final_state"] = final_state
+        else:
+            # A failed run must not leave a previous successful run's results
+            # visible below the error box — the tabs would silently render
+            # stale results from an unrelated dataset with no indication
+            # they don't belong to the run that just failed.
+            st.session_state.pop("final_state", None)
 
     if "final_state" in st.session_state:
         state = st.session_state["final_state"]

@@ -53,7 +53,7 @@ class SupervisorAgent:
     # returning the wrong type for one of these would otherwise fail deep
     # inside LangGraph's state merge with a confusing error, so it's checked
     # here instead.
-    ACCUMULATE_FIELDS = ("agent_decisions", "logs", "errors")
+    ACCUMULATE_FIELDS = ("agent_decisions", "logs", "errors", "llm_arbitration_log")
 
     def _wrap(self, step_name: str, agent) -> Callable[[EMADSState], dict]:
         """

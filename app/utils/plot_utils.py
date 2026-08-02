@@ -32,7 +32,13 @@ def save_current_figure(filename: str) -> str:
     path = os.path.join(output_dir, filename)
     plt.tight_layout()
     plt.savefig(path)
-    plt.close()
+    # plt.close() alone only closes the CURRENT figure. ConfusionMatrixDisplay
+    # .plot()/RocCurveDisplay.from_predictions() create their OWN figure via
+    # plt.subplots() when called without an explicit ax=, on top of the
+    # figure this module already opened beforehand — leaving that first,
+    # empty figure open forever across every pipeline run in a long-lived
+    # Streamlit process. close('all') clears both.
+    plt.close("all")
     return path
 
 
