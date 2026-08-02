@@ -115,15 +115,32 @@ class ModelSelectionAgent(BaseAgent):
             # Recreate the exact same split used by the Evaluation Agent, so the
             # test set is never touched here (no leakage) and metrics stay comparable.
             stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-            X_train, _, y_train, _ = train_test_split(
-                X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
-            )
+            try:
+                X_train, _, y_train, _ = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+                )
+            except ValueError:
+                # Every class has >=2 rows but sklearn ALSO requires
+                # test_size >= n_classes for a stratified split — on a very
+                # small dataset (e.g. after PreprocessingAgent drops
+                # duplicates) that second condition can still fail. Fall
+                # back to an unstratified split rather than crashing.
+                X_train, _, y_train, _ = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=None
+                )
 
             cv = self._build_cv_splitter(problem_type, y_train)
             scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
             results = self._score_candidates_supervised(candidates, X_train, y_train, cv, scoring)
 
         results.sort(key=lambda r: r["mean_score"], reverse=True)
+        if results[0]["mean_score"] == float("-inf"):
+            # Every single candidate raised during scoring (e.g. a dtype/shape
+            # issue that only manifests inside cross_val_score/fit_predict) —
+            # there is no real winner here, so fail loudly instead of quietly
+            # "selecting" an unfit, broken model for the rest of the pipeline.
+            failures = "; ".join(f"{r['model_name']}: {r.get('error', 'unknown error')}" for r in results)
+            raise ValueError(f"All candidate models failed during scoring — {failures}")
         p_value, arbitration_entry, best_result = self._compare_top_two(results)
         best_model_name = best_result["model_name"]
         best_model = candidates[best_model_name]

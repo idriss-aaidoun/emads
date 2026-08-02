@@ -148,7 +148,12 @@ class PreprocessingAgent(BaseAgent):
 
         # 6. Encode target if it's categorical (classification) — no-op when
         # there is no target (clustering/anomaly detection).
-        if target_column and y.dtype == "object":
+        # NOTE: `y.dtype == "object"` used to be enough to detect a string
+        # column, but pandas >= 3.0 infers plain string columns as its new
+        # "str" dtype by default, not "object" — that equality check silently
+        # stopped matching, so string class labels (e.g. 'a'/'b'/'c') were
+        # never label-encoded. is_numeric_dtype is dtype-backend-agnostic.
+        if target_column and not pd.api.types.is_numeric_dtype(y):
             y = LabelEncoder().fit_transform(y.astype(str))
 
         # 7. Scale numerical features
@@ -249,7 +254,12 @@ class PreprocessingAgent(BaseAgent):
 
     def _encode_categoricals(self, X: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         report = {}
-        categorical_cols = X.select_dtypes(include=["object", "category"]).columns
+        # "str" is pandas >= 3.0's new default dtype for plain string columns.
+        # select_dtypes(["object", "category"]) still matches it today only
+        # via a deprecated backward-compatibility shim (Pandas4Warning) that
+        # a future pandas release will remove — listing it explicitly avoids
+        # silently losing all categorical feature encoding when that happens.
+        categorical_cols = X.select_dtypes(include=["object", "category", "str"]).columns
 
         for col in categorical_cols:
             n_unique = X[col].nunique()

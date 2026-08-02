@@ -70,9 +70,18 @@ class EvaluationAgent(BaseAgent):
             y = df[target_column]
 
             stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
-            )
+            try:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+                )
+            except ValueError:
+                # Every class has >=2 rows but sklearn ALSO requires
+                # test_size >= n_classes for a stratified split — on a very
+                # small dataset that second condition can still fail. Fall
+                # back to an unstratified split rather than crashing.
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=None
+                )
 
             y_pred = model.predict(X_test)
             evaluation_plots = []

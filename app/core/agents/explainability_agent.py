@@ -173,7 +173,12 @@ class ExplainabilityAgent(BaseAgent):
         cross_check_note = self._build_cross_check_note(top_feature, permutation_importance)
         if agreement_score is not None:
             agreement_note = f" SHAP/permutation-importance rank agreement (Spearman): {agreement_score:.3f}."
-            confidence = float(agreement_score)
+            # agreement_score is a Spearman correlation in [-1, 1] — used
+            # directly as confidence, a negative correlation (the two methods
+            # actively disagreeing) produced a nonsensical negative
+            # confidence. Rescale to [0, 1] first, same clamp range as every
+            # other agent's grounded confidence.
+            confidence = float(max(0.3, min(0.95, (agreement_score + 1) / 2)))
         else:
             # No agreement score could be computed (SHAP or permutation
             # importance unavailable) — fall back to the margin-based signal
@@ -293,7 +298,14 @@ class ExplainabilityAgent(BaseAgent):
         if hasattr(shap_values, "values") and shap_values.values.ndim == 3:
             mean_abs = np.abs(shap_values.values).mean(axis=2)
             values_for_plot = shap.Explanation(
-                values=mean_abs, data=sample.values, feature_names=list(sample.columns)
+                values=mean_abs, data=sample.values, feature_names=list(sample.columns),
+                # shap.summary_plot's bar-plot path unconditionally reads
+                # base_values.shape — omitting it (defaults to None) crashes
+                # with "'NoneType' object has no attribute 'shape'" for any
+                # non-tree multiclass model. The per-class baseline is
+                # meaningless once collapsed to a single bar chart anyway, so
+                # a same-length zero vector is a safe placeholder.
+                base_values=np.zeros(len(sample)),
             )
 
         plt.figure()
@@ -343,9 +355,14 @@ class ExplainabilityAgent(BaseAgent):
         X = df.drop(columns=[target_column])
         y = df[target_column]
         stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-        _, X_test, _, y_test = train_test_split(
-            X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=stratify_y
-        )
+        try:
+            _, X_test, _, y_test = train_test_split(
+                X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=stratify_y
+            )
+        except ValueError:
+            _, X_test, _, y_test = train_test_split(
+                X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=None
+            )
         y_pred = model.predict(X_test)
 
         if problem_type == "classification":

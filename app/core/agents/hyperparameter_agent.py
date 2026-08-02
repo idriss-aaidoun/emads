@@ -77,9 +77,16 @@ class HyperparameterAgent(BaseAgent):
         # LinearRegression has essentially no meaningful hyperparameters to tune.
         if model_name == "LinearRegression":
             df = pd.read_csv(data_path)
-            final_model = LinearRegression().fit(
-                df.drop(columns=[target_column]), df[target_column]
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
+            # Fit only on the same training split ModelSelectionAgent/
+            # EvaluationAgent use — fitting on the full dataframe here would
+            # leak the held-out test rows into training and inflate the
+            # metrics EvaluationAgent reports afterwards.
+            X_train, _, y_train, _ = train_test_split(
+                X, y, test_size=0.2, random_state=RANDOM_STATE
             )
+            final_model = LinearRegression().fit(X_train, y_train)
             os.makedirs(MODELS_DIR, exist_ok=True)
             model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
             with open(model_path, "wb") as f:
@@ -118,9 +125,18 @@ class HyperparameterAgent(BaseAgent):
             y = df[target_column]
 
             stratify_y = y if problem_type == "classification" and y.value_counts().min() >= 2 else None
-            X_train, _, y_train, _ = train_test_split(
-                X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
-            )
+            try:
+                X_train, _, y_train, _ = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=stratify_y
+                )
+            except ValueError:
+                # Every class has >=2 rows but sklearn ALSO requires
+                # test_size >= n_classes for a stratified split — on a very
+                # small dataset that second condition can still fail. Fall
+                # back to an unstratified split rather than crashing.
+                X_train, _, y_train, _ = train_test_split(
+                    X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=None
+                )
 
             cv = self._build_cv_splitter(problem_type, y_train)
             scoring = "accuracy" if problem_type == "classification" else "neg_root_mean_squared_error"
@@ -132,6 +148,44 @@ class HyperparameterAgent(BaseAgent):
 
         study = optuna.create_study(direction="maximize", sampler=TPESampler(seed=RANDOM_STATE))
         study.optimize(objective, n_trials=N_TRIALS, timeout=TIMEOUT_SECONDS, show_progress_bar=False)
+
+        completed_trials = [
+            t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+        ]
+        if not completed_trials:
+            # Every trial errored (e.g. an unsupported hyperparameter
+            # combination) or the 60s timeout hit before any trial finished —
+            # study.best_params/.best_value would raise. Degrade to the
+            # untuned baseline instead of crashing the pipeline.
+            self.logger.warning(
+                "No Optuna trial completed for '%s'; keeping untuned baseline.", model_name
+            )
+            baseline_model = self._build_model_from_params(model_name, problem_type, {})
+            if is_unsupervised:
+                baseline_model.fit(X_train)
+            else:
+                baseline_model.fit(X_train, y_train)
+            os.makedirs(MODELS_DIR, exist_ok=True)
+            model_path = os.path.join(MODELS_DIR, "selected_model.pkl")
+            with open(model_path, "wb") as f:
+                pickle.dump(baseline_model, f)
+            return {
+                "best_hyperparameters": {},
+                "optimization_summary": {
+                    "skipped": True,
+                    "reason": "No Optuna trial completed successfully; kept the untuned baseline model.",
+                },
+                "model_path": model_path,
+                "agent_decisions": [self.decide(
+                    decision=f"Kept untuned baseline for '{model_name}'",
+                    reasoning="Every Optuna trial failed or the search timed out before any trial "
+                    "completed, so the already-known baseline configuration was kept instead.",
+                    confidence=0.5,
+                )],
+                "logs": [self.log(
+                    f"Hyperparameter search for '{model_name}' produced no completed trials; kept baseline."
+                )],
+            }
 
         best_params = study.best_params
         best_score = study.best_value
