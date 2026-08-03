@@ -45,6 +45,7 @@ STEP_LABELS = {
     "evaluation": "📈 Evaluating performance",
     "explainability": "💡 Explaining model decisions",
     "reporting": "📄 Generating final report",
+    "meta_evaluation": "🧭 Auditing overall run confidence",
 }
 
 st.markdown(f"""
@@ -266,7 +267,23 @@ def _merge_stream_update(current_state: dict, update: dict) -> dict:
     return merged
 
 
+def render_meta_evaluation_badge(state: dict) -> None:
+    meta_evaluation = state.get("meta_evaluation")
+    if not meta_evaluation:
+        return
+    confidence_score = meta_evaluation.get("confidence_score")
+    recommendation = meta_evaluation.get("recommendation")
+    is_reliable = not recommendation
+    badge = "✅ Reliable" if is_reliable else "⚠️ Review recommended"
+    score_text = f"{confidence_score:.0%}" if confidence_score is not None else "N/A"
+    if is_reliable:
+        st.success(f"{badge} — overall confidence: {score_text}")
+    else:
+        st.warning(f"{badge} — overall confidence: {score_text}\n\n{recommendation}")
+
+
 def render_overview_tab(state: dict) -> None:
+    render_meta_evaluation_badge(state)
     schema = state.get("schema_info") or {}
     c1, c2, c3, c4 = st.columns(4)
     metric_card(c1, "Rows", schema.get("num_rows", "N/A"))

@@ -94,6 +94,11 @@ class EMADSState(TypedDict, total=False):
     """Records every time an agent escalated a decision to the LLM, with the
     statistical trigger condition that caused it."""
 
+    meta_evaluation: Optional[Dict[str, Any]]
+    """Final holistic audit of the run: a confidence score combining evaluation
+    metrics, explanation reliability, and arbitration frequency, plus an optional
+    recommendation — never triggers automatic re-execution, informational only."""
+
 
 def create_initial_state(dataset_path: str, dataset_name: Optional[str] = None) -> EMADSState:
     return EMADSState(

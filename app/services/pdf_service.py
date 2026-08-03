@@ -93,6 +93,7 @@ class PDFService:
         story += self._build_local_explanations_section(content_data)
         story += self._build_decisions_log(content_data)
         story += self._build_arbitration_section(content_data)
+        story += self._build_confidence_audit_section(content_data)
         story += self._section_header("Conclusion")
         story.append(Paragraph(self._safe_text(content_data.get("conclusion", "")), self.styles["Body"]))
 
@@ -310,6 +311,32 @@ class PDFService:
             ]))
             elements.append(callout)
             elements.append(Spacer(1, 0.25 * cm))
+        return elements
+
+    def _build_confidence_audit_section(self, data: Dict[str, Any]) -> List[Any]:
+        """
+        Renders MetaEvaluatorAgent's holistic verdict, if present in the
+        payload. Purely informational — mirrors the "never re-execute
+        automatically" rule the agent itself follows: this shows the verdict
+        and recommendation, nothing more.
+        """
+        meta_evaluation = data.get("meta_evaluation")
+        if not meta_evaluation:
+            return []
+        elements = self._section_header("System Confidence Audit")
+        confidence_score = meta_evaluation.get("confidence_score")
+        score_text = f"{confidence_score:.0%}" if confidence_score is not None else "N/A"
+        verdict = meta_evaluation.get("verdict") or "No verdict available."
+        color = self._confidence_color(confidence_score) if confidence_score is not None else MUTED_TEXT
+        elements.append(Paragraph(
+            f'<font color="{color.hexval()}"><b>Overall confidence: {score_text}</b></font><br/>{escape(verdict)}',
+            self.styles["Body"],
+        ))
+        recommendation = meta_evaluation.get("recommendation")
+        if recommendation:
+            elements.append(Paragraph(
+                f"<b>Recommendation:</b> {escape(recommendation)}", self.styles["Body"]
+            ))
         return elements
 
     # ------------------------------------------------------------------

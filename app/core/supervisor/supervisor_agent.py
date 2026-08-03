@@ -26,6 +26,7 @@ from app.core.agents.hyperparameter_agent import HyperparameterAgent
 from app.core.agents.evaluation_agent import EvaluationAgent
 from app.core.agents.explainability_agent import ExplainabilityAgent
 from app.core.agents.reporting_agent import ReportingAgent
+from app.core.agents.meta_evaluator_agent import MetaEvaluatorAgent
 
 
 class SupervisorAgent:
@@ -45,6 +46,7 @@ class SupervisorAgent:
             ("evaluation", EvaluationAgent()),
             ("explainability", ExplainabilityAgent()),
             ("reporting", ReportingAgent()),
+            ("meta_evaluation", MetaEvaluatorAgent()),
         ]
         self.workflow = self._build_workflow_graph()
 
