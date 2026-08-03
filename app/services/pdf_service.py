@@ -220,11 +220,65 @@ class PDFService:
         if hyperparams:
             elements.append(Paragraph(f"<b>Best hyperparameters:</b> {escape(str(hyperparams))}", self.styles["Body"]))
 
-        model_selection_summary = data.get("model_selection_summary")
-        if model_selection_summary:
-            elements += self._section_header("Model Selection Rationale")
-            elements.append(Paragraph(self._safe_text(model_selection_summary), self.styles["Body"]))
+        elements += self._build_model_selection_verdict(data)
+        return elements
 
+    def _build_model_selection_verdict(self, data: Dict[str, Any]) -> List[Any]:
+        """
+        Splits ModelSelectionAgent's explanation into two clearly separated
+        blocks so a reader never sees the LLM's confidently-worded tie-break
+        narrative without the statistical uncertainty it exists to resolve:
+        a "Statistical Verdict" (deterministic — always shown, confidence =
+        1 - p_value even after arbitration) and an "LLM Interpretation"
+        (the conditional arbitration narrative, shown ONLY when a Wilcoxon
+        tie actually triggered it — see ModelSelectionAgent._compare_top_two).
+        """
+        decisions = data.get("agent_decisions") or []
+        selection_decision = next(
+            (d for d in decisions
+             if d.agent_name == "model_selection_agent" and d.decision.startswith("Selected '")),
+            None,
+        )
+        arbitration_entries = [
+            e for e in (data.get("llm_arbitration_log") or [])
+            if e.get("agent_name") == "model_selection_agent"
+        ]
+
+        elements = self._section_header("Statistical Verdict")
+        if selection_decision is None:
+            elements.append(Paragraph("No model selection decision recorded.", self.styles["Body"]))
+            return elements
+
+        confidence_badge = ""
+        if selection_decision.confidence is not None:
+            color = self._confidence_color(selection_decision.confidence)
+            confidence_badge = (
+                f' <font color="{color.hexval()}"><b>({selection_decision.confidence:.0%} confidence)</b></font>'
+            )
+        elements.append(Paragraph(
+            f"{escape(selection_decision.decision)}{confidence_badge}<br/>"
+            f"{escape(selection_decision.reasoning)}",
+            self.styles["Body"],
+        ))
+
+        if arbitration_entries:
+            confidence_pct = (
+                f"{selection_decision.confidence:.0%}" if selection_decision.confidence is not None else "N/A"
+            )
+            elements += self._section_header("LLM Interpretation")
+            for entry in arbitration_entries:
+                elements.append(Paragraph(
+                    f"<i>Note: this narrative explanation should not be read as statistical certainty — "
+                    f"it reflects the LLM's reasoning for breaking a tie the statistical test alone could "
+                    f"not resolve (confidence: {confidence_pct}).</i>",
+                    self.styles["Body"],
+                ))
+                elements.append(Paragraph(self._safe_text(entry.get("llm_arbitration", "")), self.styles["Body"]))
+        else:
+            elements.append(Paragraph(
+                "The statistical test found a significant difference; no LLM arbitration was needed.",
+                self.styles["Body"],
+            ))
         return elements
 
     def _build_evaluation_section(self, data: Dict[str, Any]) -> List[Any]:

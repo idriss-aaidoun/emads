@@ -173,12 +173,16 @@ class ExplainabilityAgent(BaseAgent):
         cross_check_note = self._build_cross_check_note(top_feature, permutation_importance)
         if agreement_score is not None:
             agreement_note = f" SHAP/permutation-importance rank agreement (Spearman): {agreement_score:.3f}."
-            # agreement_score is a Spearman correlation in [-1, 1] — used
-            # directly as confidence, a negative correlation (the two methods
-            # actively disagreeing) produced a nonsensical negative
-            # confidence. Rescale to [0, 1] first, same clamp range as every
-            # other agent's grounded confidence.
-            confidence = float(max(0.3, min(0.95, (agreement_score + 1) / 2)))
+            # confidence = agreement_score directly, no rescaling — a reader
+            # sees the same Spearman figure in the reasoning text above and
+            # in the confidence badge, instead of two different numbers for
+            # the same evidence (a previous version mapped [-1,1] to [0,1]
+            # via (x+1)/2, e.g. turning a modest 0.538 into a much more
+            # confident-looking 77%). The only correction applied is
+            # flooring at 0 for a negative correlation — the two methods
+            # actively disagreeing implies no meaningful agreement to be
+            # confident about, not a negative one.
+            confidence = float(max(0.0, agreement_score))
         else:
             # No agreement score could be computed (SHAP or permutation
             # importance unavailable) — fall back to the margin-based signal

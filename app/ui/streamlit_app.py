@@ -341,6 +341,53 @@ def render_preprocessing_tab(state: dict) -> None:
         st.dataframe(pd.read_csv(prep_path, nrows=10), use_container_width=True)
 
 
+def render_model_selection_verdict(state: dict) -> None:
+    """
+    Mirrors PDFService._build_model_selection_verdict: separates the
+    deterministic statistical verdict (always shown, confidence = 1 -
+    p_value even after arbitration) from the conditional LLM arbitration
+    narrative (shown ONLY when a Wilcoxon tie actually triggered one) — so
+    the UI never shows the LLM's confident tie-break text without the
+    confidence score it belongs next to.
+    """
+    decisions = state.get("agent_decisions") or []
+    selection_decision = next(
+        (d for d in decisions
+         if d.agent_name == "model_selection_agent" and d.decision.startswith("Selected '")),
+        None,
+    )
+    arbitration_entries = [
+        e for e in (state.get("llm_arbitration_log") or [])
+        if e.get("agent_name") == "model_selection_agent"
+    ]
+
+    section_title("Statistical Verdict")
+    if selection_decision is None:
+        st.info("No model selection decision recorded.")
+        return
+
+    confidence_suffix = (
+        f" ({selection_decision.confidence:.0%} confidence)" if selection_decision.confidence is not None else ""
+    )
+    st.markdown(f"**{selection_decision.decision}**{confidence_suffix}")
+    st.caption(selection_decision.reasoning)
+
+    if arbitration_entries:
+        confidence_pct = (
+            f"{selection_decision.confidence:.0%}" if selection_decision.confidence is not None else "N/A"
+        )
+        section_title("LLM Interpretation")
+        st.caption(
+            "Note: this narrative explanation should not be read as statistical certainty — it reflects "
+            f"the LLM's reasoning for breaking a tie the statistical test alone could not resolve "
+            f"(confidence: {confidence_pct})."
+        )
+        for entry in arbitration_entries:
+            st.markdown(entry.get("llm_arbitration") or "")
+    else:
+        st.caption("The statistical test found a significant difference; no LLM arbitration was needed.")
+
+
 def render_model_tab(state: dict) -> None:
     section_title("Model Comparison")
     results = state.get("candidate_models_results") or []
@@ -355,10 +402,7 @@ def render_model_tab(state: dict) -> None:
 
     st.success(f"🏆 Selected model: **{state.get('selected_model_name', 'N/A')}**")
 
-    summary = state.get("model_selection_summary")
-    if summary:
-        section_title("Why this model was selected")
-        st.markdown(summary)
+    render_model_selection_verdict(state)
 
     hyperparams = state.get("best_hyperparameters")
     if hyperparams:

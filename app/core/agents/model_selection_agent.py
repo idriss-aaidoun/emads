@@ -161,40 +161,16 @@ class ModelSelectionAgent(BaseAgent):
             confidence=confidence,
         )
 
-        self.logger.info(
-            "Calling LLM for model selection summary (model=%s)",
-            getattr(self.llm, "model_name", "unknown"),
-        )
-        # If arbitration already broke a statistical tie, the narrative call is told so
-        # explicitly — otherwise it independently "explains" a tie as if one candidate
-        # clearly outscored the other, which contradicts the arbitration log.
-        other_result = results[1] if best_result is results[0] else results[0]
-        tie_note = (
-            f"Note: '{best_model_name}' and '{other_result['model_name']}' were statistically tied "
-            f"(Wilcoxon p={p_value:.3f}); '{best_model_name}' was selected because an LLM arbitration "
-            "recommended it on interpretability/computational-cost grounds, not because of a real "
-            "performance gap."
-        ) if arbitration_entry else None
-        fallback_summary = self._build_fallback_summary(best_model_name, best_result, results, scoring, tie_note)
-        model_selection_summary = self.llm.generate_summary(
-            system_prompt=(
-                "You are a senior machine learning engineer. Explain in 4-6 concise bullet points "
-                "why a particular model was selected over the alternatives, using the comparison "
-                "results and the confidence in the choice. Be clear and non-technical. If told the "
-                "top candidates were statistically tied, say so plainly instead of inventing a "
-                "performance-based distinction that isn't there."
-            ),
-            user_prompt=self._build_llm_prompt(best_model_name, best_result, results, scoring, tie_note),
-            fallback_message=fallback_summary,
-        )
-        if not (model_selection_summary or "").strip():
-            self.logger.warning("LLM returned empty model selection summary; using deterministic fallback text.")
-            model_selection_summary = fallback_summary
-        self.logger.info(
-            "LLM model selection summary received (chars=%s, starts_with=%r)",
-            len(model_selection_summary) if model_selection_summary else 0,
-            (model_selection_summary or "")[:80],
-        )
+        # No separate, unconditional narrative call here anymore (see git
+        # history — there used to be a 2nd LLM call on every run, producing a
+        # confidently-worded "rationale" that never mentioned the confidence
+        # sitting right next to it in the Decisions Log whenever the pick was
+        # actually an arbitrated statistical tie). The ONLY LLM narrative for
+        # model selection is now the conditional arbitration call already made
+        # inside _compare_top_two() when a Wilcoxon tie required one — reused
+        # here, not recomputed, so there is exactly one LLM text describing
+        # this decision, consistent with its own confidence score.
+        model_selection_summary = arbitration_entry["llm_arbitration"] if arbitration_entry else None
 
         self.logger.info(
             "Model selection complete: selected_model=%s score=%.4f",
@@ -339,45 +315,6 @@ class ModelSelectionAgent(BaseAgent):
             f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) via {method}. "
             f"Other candidates scored: {comparison}."
         )
-
-    def _build_llm_prompt(
-        self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]],
-        scoring: str, tie_note: str | None = None,
-    ) -> str:
-        metric_label = METRIC_LABELS.get(scoring, scoring)
-        top_rows = []
-        for result in sorted(all_results, key=lambda r: r["mean_score"], reverse=True)[:5]:
-            top_rows.append(
-                f"- {result['model_name']}: mean {metric_label}={result['mean_score']:.4f}, std={result['std_score']:.4f}"
-            )
-        prompt = (
-            f"Best model: {best_model_name}\n"
-            f"Winning score: {best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}\n"
-            f"Metric: {metric_label}\n\n"
-            f"Candidate comparison:\n{chr(10).join(top_rows)}\n\n"
-        )
-        if tie_note:
-            prompt += f"{tie_note}\n\n"
-        prompt += "Explain why the selected model is preferable and mention any caveats about close competition."
-        return prompt
-
-    def _build_fallback_summary(
-        self, best_model_name: str, best_result: Dict[str, Any], all_results: List[Dict[str, Any]],
-        scoring: str, tie_note: str | None = None,
-    ) -> str:
-        metric_label = METRIC_LABELS.get(scoring, scoring)
-        others = [r for r in all_results if r["model_name"] != best_model_name]
-        comparison = ", ".join(f"{r['model_name']}={r['mean_score']:.4f}" for r in others[:4]) or "no alternatives recorded"
-        method = "a single fit on the full dataset" if scoring == "silhouette" else "cross-validation"
-        bullets = [
-            f"* **Selected Model**: `{best_model_name}` was chosen because it achieved the best mean {metric_label} "
-            f"({best_result['mean_score']:.4f} ± {best_result['std_score']:.4f}) via {method}.",
-            f"* **Comparison**: Competing models scored: {comparison}.",
-        ]
-        if tie_note:
-            bullets.append(f"* **Statistical Tie**: {tie_note}")
-        bullets.append("* **Caution**: If the margin is small, the choice should be validated further on fresh data before deployment.")
-        return "\n".join(bullets)
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
         """

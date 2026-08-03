@@ -56,13 +56,15 @@ class EDAAgent(BaseAgent):
         if missing_plot:
             generated_plots.append(missing_plot)
 
-        # Excludes target_column: it already gets a dedicated countplot below
-        # via plot_target_balance, which is the correct chart for a
-        # binary/categorical target — a generic histogram of a 0/1-encoded
-        # target is an unreadable, meaningless bimodal shape and a pure
-        # duplicate of the same variable's distribution.
-        distribution_columns = [c for c in numerical_columns if c != target_column]
-        for col in distribution_columns[:MAX_DISTRIBUTION_PLOTS]:
+        # Excludes target_column from here on: it already gets a dedicated
+        # countplot below via plot_target_balance, which is the correct
+        # chart for a binary/categorical target. Left in, it would also get
+        # a meaningless generic histogram (a pure duplicate of its own
+        # distribution) AND get flagged as an IQR "outlier" on any imbalanced
+        # target (e.g. a 97/3 class split), which is a class-balance fact
+        # already covered elsewhere in the report, not a numerical outlier.
+        feature_columns = [c for c in numerical_columns if c != target_column]
+        for col in feature_columns[:MAX_DISTRIBUTION_PLOTS]:
             generated_plots.append(plot_utils.plot_distribution(df, col))
 
         if target_column and target_column in df.columns:
@@ -70,7 +72,7 @@ class EDAAgent(BaseAgent):
                 plot_utils.plot_target_balance(df, target_column, problem_type)
             )
 
-        outliers = plot_utils.detect_outliers_iqr(df, numerical_columns)
+        outliers = plot_utils.detect_outliers_iqr(df, feature_columns)
 
         eda_stats = {
             "descriptive_stats": df.describe(include="all").to_dict(),
@@ -78,10 +80,10 @@ class EDAAgent(BaseAgent):
             "total_missing_values": int(df.isnull().sum().sum()),
         }
 
-        if outliers and numerical_columns:
+        if outliers and feature_columns:
             # More affected columns is a stronger signal this is a real
             # pattern in the data, not one-off noise in a single column.
-            affected_ratio = len(outliers) / len(numerical_columns)
+            affected_ratio = len(outliers) / len(feature_columns)
             outlier_confidence = max(0.5, min(0.9, 0.5 + affected_ratio * 0.4))
         else:
             # The "no outliers" call is more trustworthy with more rows behind it.
