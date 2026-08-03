@@ -136,7 +136,13 @@ def render_sidebar():
             if problem_type in UNSUPERVISED_PROBLEM_TYPES:
                 st.sidebar.caption("Unsupervised problem type — no target column needed; every column is used as a feature.")
             else:
-                target_column = st.sidebar.selectbox("🎯 Target column", options=list(preview_df.columns))
+                # Defaults to the last column, matching DataUnderstandingAgent's
+                # own fallback heuristic when no target is specified — the user
+                # can still override it via the selectbox.
+                columns = list(preview_df.columns)
+                target_column = st.sidebar.selectbox(
+                    "🎯 Target column", options=columns, index=len(columns) - 1
+                )
         except Exception as e:
             st.sidebar.error(f"Could not read file: {e}")
 
