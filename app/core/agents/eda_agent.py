@@ -56,7 +56,13 @@ class EDAAgent(BaseAgent):
         if missing_plot:
             generated_plots.append(missing_plot)
 
-        for col in numerical_columns[:MAX_DISTRIBUTION_PLOTS]:
+        # Excludes target_column: it already gets a dedicated countplot below
+        # via plot_target_balance, which is the correct chart for a
+        # binary/categorical target — a generic histogram of a 0/1-encoded
+        # target is an unreadable, meaningless bimodal shape and a pure
+        # duplicate of the same variable's distribution.
+        distribution_columns = [c for c in numerical_columns if c != target_column]
+        for col in distribution_columns[:MAX_DISTRIBUTION_PLOTS]:
             generated_plots.append(plot_utils.plot_distribution(df, col))
 
         if target_column and target_column in df.columns:
