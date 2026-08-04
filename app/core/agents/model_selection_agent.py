@@ -176,17 +176,26 @@ class ModelSelectionAgent(BaseAgent):
             "Model selection complete: selected_model=%s score=%.4f",
             best_model_name, best_result["mean_score"],
         )
+        logs = [self.log(
+            f"Compared {len(candidates)} model(s) via "
+            f"{'a single unsupervised fit' if is_unsupervised else f'{CV_FOLDS}-fold CV'}. "
+            f"Selected '{best_model_name}' (score={best_result['mean_score']:.4f})."
+        )]
+        if arbitration_entry and arbitration_entry.get("parsed_recommendation") is None:
+            # Previously only self.logger.warning() saw this (disk log only) — it
+            # never reached state["logs"], so the UI/PDF report showed the tie-break
+            # as if the LLM had cleanly recommended the winner. See _build_significance_note.
+            logs.append(self.log(
+                "LLM arbitration response could not be parsed into a clear model "
+                f"recommendation — fell back to the higher-CV-score model, '{best_model_name}'."
+            ))
         return {
             "candidate_models_results": results,
             "selected_model_name": best_model_name,
             "model_selection_summary": model_selection_summary,
             "agent_decisions": [selection_decision],
             "llm_arbitration_log": [arbitration_entry] if arbitration_entry else [],
-            "logs": [self.log(
-                f"Compared {len(candidates)} model(s) via "
-                f"{'a single unsupervised fit' if is_unsupervised else f'{CV_FOLDS}-fold CV'}. "
-                f"Selected '{best_model_name}' (score={best_result['mean_score']:.4f})."
-            )],
+            "logs": logs,
         }
 
     # ------------------------------------------------------------------
@@ -423,6 +432,11 @@ class ModelSelectionAgent(BaseAgent):
                 "agent_name": self.name,
                 "trigger": f"Wilcoxon p={p_value:.3f} (no significant difference)",
                 "llm_arbitration": arbitration_response,
+                # Recorded so callers (execute()'s significance note, tests) can
+                # tell a genuine parsed recommendation apart from the
+                # parse-failure fallback, instead of both looking identical
+                # once `winner` has already collapsed both cases to a model name.
+                "parsed_recommendation": recommended_name,
             }
         return p_value, arbitration_entry, winner
 
@@ -455,6 +469,22 @@ class ModelSelectionAgent(BaseAgent):
     ) -> str:
         other_name = results[1]["model_name"] if results[0]["model_name"] == final_model_name else results[0]["model_name"]
         if arbitration_entry:
+            if arbitration_entry.get("parsed_recommendation") is None:
+                # _compare_top_two() couldn't find either candidate's name in the
+                # LLM's response, so it fell back to the higher-CV-score model —
+                # saying the LLM "recommended" final_model_name here would be false;
+                # the LLM's answer was never actually followed.
+                return (
+                    f" A Wilcoxon signed-rank test on the per-fold scores found no statistically significant "
+                    f"difference between '{final_model_name}' and '{other_name}' (p={p_value:.3f}). LLM "
+                    f"arbitration was attempted, but its response could not be parsed into a clear "
+                    f"recommendation for either candidate, so the tie was broken deterministically by "
+                    f"keeping the higher-CV-score model, '{final_model_name}'. The unparsed LLM response is "
+                    f"included below for context only — it did not determine this selection: "
+                    f"{arbitration_entry['llm_arbitration']} "
+                    f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
+                    f"precisely because the models could not be statistically distinguished."
+                )
             return (
                 f" A Wilcoxon signed-rank test on the per-fold scores found no statistically significant "
                 f"difference between '{final_model_name}' and '{other_name}' (p={p_value:.3f}), so the tie "
