@@ -111,7 +111,10 @@ class LLMService:
     # ------------------------------------------------------------------
     # Core low-level call – all public methods delegate to this.
     # ------------------------------------------------------------------
-    def _call_groq(self, system_prompt: str, user_prompt: str, fallback_message: str | None = None) -> str:
+    def _call_groq(
+        self, system_prompt: str, user_prompt: str,
+        fallback_message: str | None = None, temperature: float = 0.2,
+    ) -> str:
         if not self.client:
             logger.warning(
                 "LLM call skipped: no Groq client available (model=%s, api_key_source=%s).",
@@ -143,7 +146,7 @@ class LLMService:
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        temperature=0.2,
+                        temperature=temperature,
                         max_tokens=600,
                     )
                     content = completion.choices[0].message.content
@@ -227,6 +230,9 @@ class LLMService:
     # ------------------------------------------------------------------
     # Generic wrapper used by ReportingAgent, ExplainabilityAgent, and others
     # ------------------------------------------------------------------
-    def generate_summary(self, system_prompt: str, user_prompt: str, fallback_message: str | None = None) -> str:
+    def generate_summary(
+        self, system_prompt: str, user_prompt: str,
+        fallback_message: str | None = None, temperature: float = 0.2,
+    ) -> str:
         """Generic prompt → summary helper. Delegates to _call_groq."""
-        return self._call_groq(system_prompt, user_prompt, fallback_message=fallback_message)
+        return self._call_groq(system_prompt, user_prompt, fallback_message=fallback_message, temperature=temperature)

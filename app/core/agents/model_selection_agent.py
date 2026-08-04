@@ -413,6 +413,11 @@ class ModelSelectionAgent(BaseAgent):
                     "interpretability and computational cost is recommended; defaulting to "
                     f"'{best_result['model_name']}' — recommend {best_result['model_name']}."
                 ),
+                # This response now directly decides selected_model_name (see
+                # winner-switch below), not just narrative text — temperature=0
+                # minimizes run-to-run variance in an actual model-selection
+                # decision, unlike the default 0.2 used for prose-only summaries.
+                temperature=0,
             )
             recommended_name = self._parse_arbitration_recommendation(
                 arbitration_response, best_result["model_name"], second_result["model_name"]
