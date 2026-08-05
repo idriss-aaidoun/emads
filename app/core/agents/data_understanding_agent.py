@@ -18,11 +18,6 @@ from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, AgentDecision, UNSUPERVISED_PROBLEM_TYPES
 from app.services.llm_service import LLMService
 
-# Below this confidence, the fallback "last column" heuristic is treated as
-# too uncertain to trust silently — the LLM is asked to suggest a more
-# plausible target from the column names before falling back to it.
-TARGET_ARBITRATION_THRESHOLD = 0.5
-
 # Column names commonly used for the target variable — helps the heuristic
 # below make a better guess than "always pick the last column".
 COMMON_TARGET_NAMES = {"target", "label", "class", "y", "outcome", "output"}
@@ -175,10 +170,10 @@ class DataUnderstandingAgent(BaseAgent):
         Decides which column is the target. Priority:
           1. User-provided target (if it exists in the dataset)
           2. A column whose name matches a common target name
-          3. Fallback: the last column of the dataset — if this fallback's
-             confidence is too low to trust silently, the LLM is asked to
-             suggest a more plausible target from the column names before
-             committing to it.
+          3. Fallback: the last column of the dataset — always arbitrated by
+             the LLM before committing to it (see _arbitrate_target_column),
+             since reaching this branch already means neither an explicit
+             target nor a recognized name was available.
         Every path is explained via an AgentDecision. Returns an optional
         llm_arbitration_log entry (None unless the LLM was actually consulted).
         """
@@ -209,32 +204,29 @@ class DataUnderstandingAgent(BaseAgent):
 
         fallback = str(df.columns[-1])
         # A low unique/row ratio looks target-like (a handful of repeated
-        # classes); a high ratio looks ID-like (a poor fallback guess).
+        # classes); a high ratio looks ID-like (a poor fallback guess). This
+        # score is informational only in this branch — it explains HOW
+        # uncertain the fallback guess is in the resulting AgentDecision, but
+        # it never gates whether arbitration runs: reaching this branch at
+        # all already means no target was specified and no column name
+        # matched a common convention, which is reason enough on its own to
+        # ask the LLM for a second opinion before committing to "last column".
         n_rows = len(df)
         unique_ratio = df[fallback].nunique(dropna=True) / n_rows if n_rows else 1.0
         confidence = max(0.15, min(0.55, 0.55 - unique_ratio * 0.4))
 
-        if confidence < TARGET_ARBITRATION_THRESHOLD:
-            return self._arbitrate_target_column(df, fallback, unique_ratio, confidence)
-
-        return fallback, self.decide(
-            decision=f"Selected '{fallback}' as target column (fallback)",
-            reasoning=(
-                "No target was specified and no column matched a common target "
-                "name, so the last column of the dataset was assumed to be the "
-                f"target (unique/row ratio={unique_ratio:.2f}). This should be "
-                "confirmed by the user."
-            ),
-            confidence=confidence,
-        ), None
+        return self._arbitrate_target_column(df, fallback, unique_ratio, confidence)
 
     def _arbitrate_target_column(
         self, df: pd.DataFrame, fallback: str, unique_ratio: float, fallback_confidence: float
     ) -> tuple[str, AgentDecision, Dict[str, Any]]:
         """Asks the LLM to suggest a more plausible target column from the
-        dataset's column names when the "last column" fallback's confidence
-        is too low to trust silently. Only used if the LLM's answer is a real
-        column in the dataset — an unusable answer just keeps the fallback."""
+        dataset's column names whenever no target was specified and no column
+        name matched a common convention — unconditionally in that case, not
+        gated on the fallback's confidence score (that score is reported in
+        the resulting AgentDecision purely as context, not as a trigger).
+        Only used if the LLM's answer is a real column in the dataset — an
+        unusable answer just keeps the fallback."""
         columns_list = list(df.columns)
         suggestion = self.llm.generate_summary(
             system_prompt=(
@@ -250,7 +242,7 @@ class DataUnderstandingAgent(BaseAgent):
 
         arbitration_entry = {
             "agent_name": self.name,
-            "trigger": "target confidence below 0.5",
+            "trigger": "no target specified and no common target name matched",
             "llm_arbitration": suggestion,
         }
 
@@ -258,12 +250,12 @@ class DataUnderstandingAgent(BaseAgent):
             return suggested_column, self.decide(
                 decision=f"Selected '{suggested_column}' as target column (LLM arbitration)",
                 reasoning=(
-                    f"The fallback heuristic (last column '{fallback}', unique/row ratio="
-                    f"{unique_ratio:.2f}) only reached confidence={fallback_confidence:.2f}, below the "
-                    f"{TARGET_ARBITRATION_THRESHOLD} threshold for trusting it silently. The LLM was "
-                    f"asked to suggest a more plausible target from the column names and proposed "
-                    f"'{suggested_column}', which is a real column in the dataset — used instead. "
-                    "This should still be confirmed by the user."
+                    f"No target was specified and no column matched a common target name, so the "
+                    f"LLM was asked to suggest a more plausible target from the column names than "
+                    f"the last-column fallback ('{fallback}', unique/row ratio={unique_ratio:.2f}, "
+                    f"fallback confidence={fallback_confidence:.2f}). It proposed '{suggested_column}', "
+                    "which is a real column in the dataset — used instead. This should still be "
+                    "confirmed by the user."
                 ),
                 confidence=0.6,
             ), arbitration_entry

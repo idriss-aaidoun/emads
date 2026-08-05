@@ -1,0 +1,368 @@
+2026-08-05 10:09:24 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:25 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:25 | INFO     | emads.model_selection_agent | Wilcoxon p=0.8125 between 'RandomForest' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:25 | INFO     | emads.model_selection_agent | LLM arbitration recommended 'LogisticRegression' over the tie-break default — switching selection.
+2026-08-05 10:09:25 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:25 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:25 | INFO     | emads.model_selection_agent | Wilcoxon p=0.8125 between 'RandomForest' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:25 | WARNING  | emads.model_selection_agent | LLM arbitration response did not clearly recommend either model; keeping 'RandomForest'.
+2026-08-05 10:09:25 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:26 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | Wilcoxon p=0.8125 between 'RandomForest' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:26 | WARNING  | emads.model_selection_agent | LLM arbitration response did not clearly recommend either model; keeping 'RandomForest'.
+2026-08-05 10:09:26 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:26 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:09:26 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: C:\Users\ThinkPad\AppData\Local\Temp\tmp3vzjc7v5\preprocessed.csv
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=0.2780±0.0271 metric=accuracy
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.2500±0.0141 metric=accuracy
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | Wilcoxon p=0.3125 between 'LightGBM' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | LLM arbitration recommended 'LogisticRegression' over the tie-break default — switching selection.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LogisticRegression score=0.2500
+2026-08-05 10:09:26 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:26 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:09:26 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: C:\Users\ThinkPad\AppData\Local\Temp\tmp7k0z8k9p\preprocessed.csv
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.8040±0.0102 metric=accuracy
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.8020±0.0075 metric=accuracy
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | Wilcoxon p=0.8125 between 'RandomForest' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:26 | WARNING  | emads.model_selection_agent | LLM arbitration response did not clearly recommend either model; keeping 'RandomForest'.
+2026-08-05 10:09:26 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=RandomForest score=0.8040
+2026-08-05 10:09:26 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:27 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:09:27 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: C:\Users\ThinkPad\AppData\Local\Temp\tmplp4ju_vb\preprocessed.csv
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.8040±0.0102 metric=accuracy
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.8020±0.0075 metric=accuracy
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | Wilcoxon p=0.8125 between 'RandomForest' and 'LogisticRegression' — no significant difference, escalating to LLM.
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | LLM arbitration recommended 'LogisticRegression' over the tie-break default — switching selection.
+2026-08-05 10:09:27 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LogisticRegression score=0.8020
+2026-08-05 10:09:27 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:27 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:27 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:27 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:27 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:28 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:28 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:28 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:28 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:09:28 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:09:28 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:09:28 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:09:28 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpn6i5gd7w\dataset.csv
+2026-08-05 10:09:28 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (8, 3)
+2026-08-05 10:09:28 | INFO     | emads.data_understanding_agent | execute() complete — rows=8 cols=3 target='label' problem_type='classification' quality_issues=0
+2026-08-05 10:09:28 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-05 10:09:28 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-05 10:09:28 | INFO     | emads.eda_agent | execute() started
+2026-08-05 10:09:28 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpn6i5gd7w\dataset.csv
+2026-08-05 10:09:29 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-05 10:09:29 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=894
+2026-08-05 10:09:30 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1305
+2026-08-05 10:09:30 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1305, starts_with="Here's a concise summary of the dataset based on the provided statistics:\n\n• **D")
+2026-08-05 10:09:30 | INFO     | emads.eda_agent | execute() complete — plots=4 outlier_cols=0
+2026-08-05 10:09:30 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-05 10:09:30 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-05 10:09:30 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-05 10:09:30 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpn6i5gd7w\dataset.csv
+2026-08-05 10:09:30 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(8, 3) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-08-05 10:09:30 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-08-05 10:09:30 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-08-05 10:09:30 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-08-05 10:09:30 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:09:30 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-08-05 10:09:38 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=0.1667±0.2357 metric=accuracy
+2026-08-05 10:09:44 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=0.1667±0.2357 metric=accuracy
+2026-08-05 10:09:50 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.1667±0.2357 metric=accuracy
+2026-08-05 10:09:50 | INFO     | emads.model_selection_agent | CV result — model=XGBoost score=0.5000±0.0000 metric=accuracy
+2026-08-05 10:09:53 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=0.5000±0.0000 metric=accuracy
+2026-08-05 10:09:53 | INFO     | emads.model_selection_agent | Wilcoxon p=1.0000 between 'XGBoost' and 'LightGBM' — no significant difference, escalating to LLM.
+2026-08-05 10:09:53 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=433 user_chars=185
+2026-08-05 10:09:53 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=421
+2026-08-05 10:09:53 | INFO     | emads.model_selection_agent | LLM arbitration recommended 'LightGBM' over the tie-break default — switching selection.
+2026-08-05 10:09:53 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LightGBM score=0.5000
+2026-08-05 10:09:53 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-08-05 10:09:53 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-08-05 10:09:58 | INFO     | emads.hyperparameter_agent | Initial tuning for 'LightGBM' improved score by only 0.0000 (< 0.01 threshold) — retrying once with a widened search space (remaining budget=84.7s).
+2026-08-05 10:10:03 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-08-05 10:10:03 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-08-05 10:10:03 | INFO     | emads.evaluation_agent | execute() started
+2026-08-05 10:10:04 | INFO     | emads.evaluation_agent | Evaluation metrics: {'accuracy': 0.5, 'precision': 0.25, 'recall': 0.5, 'f1_score': 0.3333333333333333, 'roc_auc': 0.5, 'confusion_matrix': [[1, 0], [1, 0]], 'cv_mean_accuracy': 0.5, 'cv_std_accuracy': 0.0, 'cv_ci_lower': 0.5, 'cv_ci_upper': 0.5}
+2026-08-05 10:10:04 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-08-05 10:10:04 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-08-05 10:10:04 | INFO     | emads.explainability_agent | execute() started
+2026-08-05 10:10:04 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-08-05 10:10:04 | INFO     | emads.explainability_agent | Computing SHAP values (model=LightGBM sample_size=100)
+2026-08-05 10:10:04 | INFO     | emads.explainability_agent | SHAP computation successful — top_features=['feature_1', 'feature_2']
+2026-08-05 10:10:05 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-08-05 10:10:05 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=276 user_chars=294
+2026-08-05 10:10:05 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1878
+2026-08-05 10:10:05 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1878, starts_with="Here's a plain English explanation of the model's behavior:\n\n* **Native importan")
+2026-08-05 10:10:05 | INFO     | emads.explainability_agent | execute() complete — top_feature=feature_1 shap_plots=1
+2026-08-05 10:10:05 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-08-05 10:10:05 | INFO     | emads.meta_evaluator_agent | >>> START agent=meta_evaluator_agent
+2026-08-05 10:10:05 | INFO     | emads.meta_evaluator_agent | <<< END   agent=meta_evaluator_agent  status=OK
+2026-08-05 10:10:05 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-08-05 10:10:05 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=196 user_chars=312
+2026-08-05 10:10:06 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=442
+2026-08-05 10:10:06 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-08-05 10:10:06 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:06 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:06 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:07 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:07 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:07 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:07 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:08 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:08 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:08 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:08 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:10:08 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:10:08 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp7iljptps\dataset.csv
+2026-08-05 10:10:08 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (2, 2)
+2026-08-05 10:10:08 | INFO     | emads.data_understanding_agent | execute() complete — rows=2 cols=2 target='target' problem_type='regression' quality_issues=2
+2026-08-05 10:10:08 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-05 10:10:08 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-05 10:10:08 | INFO     | emads.eda_agent | execute() started
+2026-08-05 10:10:08 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp7iljptps\dataset.csv
+2026-08-05 10:10:09 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-05 10:10:09 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=586
+2026-08-05 10:10:10 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1400
+2026-08-05 10:10:10 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1400, starts_with='**Summary of Dataset Analysis**\n\n* **Dataset Shape:** The dataset has 2 rows and')
+2026-08-05 10:10:10 | INFO     | emads.eda_agent | execute() complete — plots=4 outlier_cols=0
+2026-08-05 10:10:10 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-05 10:10:10 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-05 10:10:10 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-05 10:10:10 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp7iljptps\dataset.csv
+2026-08-05 10:10:10 | ERROR    | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=ERROR  error=No rows remain after dropping missing target values.
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\base_agent.py", line 85, in execute_logged
+    result = self.execute(state)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\preprocessing_agent.py", line 80, in execute
+    raise ValueError("No rows remain after dropping missing target values.")
+ValueError: No rows remain after dropping missing target values.
+2026-08-05 10:10:10 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:10 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:10 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:10 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:10 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:10 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:10 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:11 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:11 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:10:11 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:10:11 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:10:11 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:10:11 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpwoyrtk0n\dataset.csv
+2026-08-05 10:10:11 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (8, 3)
+2026-08-05 10:10:11 | INFO     | emads.data_understanding_agent | execute() complete — rows=8 cols=3 target='salary' problem_type='regression' quality_issues=0
+2026-08-05 10:10:11 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-05 10:10:11 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-05 10:10:11 | INFO     | emads.eda_agent | execute() started
+2026-08-05 10:10:11 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpwoyrtk0n\dataset.csv
+2026-08-05 10:10:12 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-05 10:10:12 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=817
+2026-08-05 10:10:13 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1324
+2026-08-05 10:10:13 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1324, starts_with="Here's a concise summary of the dataset based on the provided statistics:\n\n* **D")
+2026-08-05 10:10:13 | INFO     | emads.eda_agent | execute() complete — plots=4 outlier_cols=0
+2026-08-05 10:10:13 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-05 10:10:13 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-05 10:10:13 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-05 10:10:13 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmpwoyrtk0n\dataset.csv
+2026-08-05 10:10:13 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(8, 3) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-08-05 10:10:13 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-08-05 10:10:13 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-08-05 10:10:13 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-08-05 10:10:13 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:10:13 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-08-05 10:10:13 | INFO     | emads.model_selection_agent | CV result — model=LinearRegression score=-3325.5543±2155.2412 metric=neg_root_mean_squared_error
+2026-08-05 10:10:13 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=-10162.2777±3424.6332 metric=neg_root_mean_squared_error
+2026-08-05 10:10:13 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=-6606.0476±6726.2460 metric=neg_root_mean_squared_error
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | CV result — model=XGBoost score=-13162.2791±5172.4726 metric=neg_root_mean_squared_error
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=-14446.6933±10531.1705 metric=neg_root_mean_squared_error
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | Wilcoxon p=0.3125 between 'LinearRegression' and 'RandomForest' — no significant difference, escalating to LLM.
+2026-08-05 10:10:14 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=433 user_chars=244
+2026-08-05 10:10:14 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=376
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | LLM arbitration recommended 'RandomForest' over the tie-break default — switching selection.
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=RandomForest score=-6606.0476
+2026-08-05 10:10:14 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-08-05 10:10:14 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-08-05 10:10:43 | INFO     | emads.hyperparameter_agent | Initial tuning for 'RandomForest' improved score by only -3966.7915 (< 0.01 threshold) — retrying once with a widened search space (remaining budget=61.0s).
+2026-08-05 10:11:43 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-08-05 10:11:43 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-08-05 10:11:43 | INFO     | emads.evaluation_agent | execute() started
+2026-08-05 10:11:49 | INFO     | emads.evaluation_agent | Evaluation metrics: {'mae': 2555.0, 'mse': 6744250.0, 'rmse': 2596.9693875746784, 'r2': 0.9736552734375, 'cv_mean_neg_rmse': -6892.80623105953, 'cv_std_neg_rmse': 6629.0868346301595, 'cv_ci_lower': -12703.457037124452, 'cv_ci_upper': -1082.1554249946075}
+2026-08-05 10:11:49 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-08-05 10:11:49 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-08-05 10:11:49 | INFO     | emads.explainability_agent | execute() started
+2026-08-05 10:11:49 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-08-05 10:11:50 | INFO     | emads.explainability_agent | Computing SHAP values (model=RandomForest sample_size=100)
+2026-08-05 10:11:50 | INFO     | emads.explainability_agent | SHAP computation successful — top_features=['age', 'experience']
+2026-08-05 10:11:50 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-08-05 10:11:50 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=276 user_chars=283
+2026-08-05 10:11:51 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1966
+2026-08-05 10:11:51 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1966, starts_with="Here's a plain English explanation of the model's behavior:\n\n* **Age and experie")
+2026-08-05 10:11:51 | INFO     | emads.explainability_agent | execute() complete — top_feature=age shap_plots=1
+2026-08-05 10:11:51 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-08-05 10:11:51 | INFO     | emads.meta_evaluator_agent | >>> START agent=meta_evaluator_agent
+2026-08-05 10:11:51 | INFO     | emads.meta_evaluator_agent | <<< END   agent=meta_evaluator_agent  status=OK
+2026-08-05 10:11:51 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-08-05 10:11:51 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=196 user_chars=325
+2026-08-05 10:11:52 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=448
+2026-08-05 10:11:52 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-08-05 10:11:52 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:11:52 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:11:52 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:11:53 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:11:53 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:11:53 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:11:53 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:11:53 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:11:53 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:11:53 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:11:53 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:11:53 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:11:53 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp02puv4x8\dataset.csv
+2026-08-05 10:11:53 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (60, 2)
+2026-08-05 10:11:53 | INFO     | emads.data_understanding_agent | execute() complete — rows=60 cols=2 target='None' problem_type='anomaly_detection' quality_issues=0
+2026-08-05 10:11:53 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-05 10:11:53 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-05 10:11:53 | INFO     | emads.eda_agent | execute() started
+2026-08-05 10:11:53 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp02puv4x8\dataset.csv
+2026-08-05 10:11:54 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-05 10:11:54 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=802
+2026-08-05 10:11:55 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1158
+2026-08-05 10:11:55 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1158, starts_with='**Summary of Dataset Analysis**\n\n* **Dataset Shape**: The dataset consists of 60')
+2026-08-05 10:11:55 | INFO     | emads.eda_agent | execute() complete — plots=3 outlier_cols=0
+2026-08-05 10:11:55 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-05 10:11:55 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-05 10:11:55 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-05 10:11:55 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp02puv4x8\dataset.csv
+2026-08-05 10:11:55 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(60, 2) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-08-05 10:11:55 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-08-05 10:11:55 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-08-05 10:11:55 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-08-05 10:11:55 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:11:55 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-08-05 10:11:55 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=IsolationForest score=0.0016
+2026-08-05 10:11:55 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-08-05 10:11:55 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-08-05 10:12:00 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-08-05 10:12:00 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-08-05 10:12:00 | INFO     | emads.evaluation_agent | execute() started
+2026-08-05 10:12:00 | INFO     | emads.evaluation_agent | Evaluation metrics: {'silhouette_score': 0.016945920835218245, 'davies_bouldin_score': 6.473977600870751, 'calinski_harabasz_score': 1.0310315920311153, 'n_anomalies_detected': 16, 'anomaly_rate': 0.2667}
+2026-08-05 10:12:00 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-08-05 10:12:00 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-08-05 10:12:00 | INFO     | emads.explainability_agent | execute() started
+2026-08-05 10:12:00 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-08-05 10:12:00 | INFO     | emads.explainability_agent | Computing SHAP values (model=IsolationForest sample_size=100)
+2026-08-05 10:12:01 | INFO     | emads.explainability_agent | SHAP computation successful — top_features=['feature_1', 'feature_2']
+2026-08-05 10:12:01 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-08-05 10:12:01 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=276 user_chars=173
+2026-08-05 10:12:01 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=2016
+2026-08-05 10:12:01 | INFO     | emads.explainability_agent | LLM explainability response received (chars=2016, starts_with="Here's a plain English explanation of the model's behavior:\n\n* **The model is fo")
+2026-08-05 10:12:01 | INFO     | emads.explainability_agent | execute() complete — top_feature=unknown shap_plots=1
+2026-08-05 10:12:01 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-08-05 10:12:01 | INFO     | emads.meta_evaluator_agent | >>> START agent=meta_evaluator_agent
+2026-08-05 10:12:01 | INFO     | emads.meta_evaluator_agent | <<< END   agent=meta_evaluator_agent  status=OK
+2026-08-05 10:12:01 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-08-05 10:12:01 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=196 user_chars=276
+2026-08-05 10:12:02 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=316
+2026-08-05 10:12:02 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-08-05 10:12:02 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:02 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:02 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:03 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:03 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:03 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:03 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:03 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:03 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:03 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:03 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:12:03 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:12:03 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp03y52fw9\dataset.csv
+2026-08-05 10:12:03 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (60, 2)
+2026-08-05 10:12:03 | INFO     | emads.data_understanding_agent | execute() complete — rows=60 cols=2 target='None' problem_type='clustering' quality_issues=0
+2026-08-05 10:12:03 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-05 10:12:03 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-05 10:12:03 | INFO     | emads.eda_agent | execute() started
+2026-08-05 10:12:03 | DEBUG    | emads.eda_agent | Reading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp03y52fw9\dataset.csv
+2026-08-05 10:12:04 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-05 10:12:04 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=328 user_chars=802
+2026-08-05 10:12:05 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=872
+2026-08-05 10:12:05 | INFO     | emads.eda_agent | LLM EDA summary received (chars=872, starts_with='**Dataset Summary**\n\n* **Dataset Shape:** The dataset consists of 60 rows and 2 ')
+2026-08-05 10:12:05 | INFO     | emads.eda_agent | execute() complete — plots=3 outlier_cols=0
+2026-08-05 10:12:05 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-05 10:12:05 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-05 10:12:05 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-05 10:12:05 | DEBUG    | emads.preprocessing_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp03y52fw9\dataset.csv
+2026-08-05 10:12:05 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(60, 2) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-08-05 10:12:05 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-08-05 10:12:05 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-08-05 10:12:05 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-08-05 10:12:05 | INFO     | emads.model_selection_agent | execute() started
+2026-08-05 10:12:05 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-08-05 10:12:05 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=DBSCAN score=0.9221
+2026-08-05 10:12:05 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-08-05 10:12:05 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-08-05 10:12:05 | INFO     | emads.hyperparameter_agent | Initial tuning for 'DBSCAN' improved score by only 0.0000 (< 0.01 threshold) — retrying once with a widened search space (remaining budget=89.9s).
+2026-08-05 10:12:05 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-08-05 10:12:05 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-08-05 10:12:05 | INFO     | emads.evaluation_agent | execute() started
+2026-08-05 10:12:05 | INFO     | emads.evaluation_agent | Evaluation metrics: {'silhouette_score': 0.9220574465910916, 'davies_bouldin_score': 0.10705458383906133, 'calinski_harabasz_score': 3977.698357707541, 'n_clusters_found': 2, 'cluster_sizes': {'0': 30, '1': 30}}
+2026-08-05 10:12:05 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-08-05 10:12:05 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-08-05 10:12:05 | INFO     | emads.explainability_agent | execute() started
+2026-08-05 10:12:05 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-08-05 10:12:05 | INFO     | emads.explainability_agent | Computing SHAP values (model=DBSCAN sample_size=100)
+2026-08-05 10:12:05 | WARNING  | emads.explainability_agent | SHAP computation skipped: The passed model is not callable and cannot be analyzed directly with the given masker! Model: DBSCAN(eps=0.8116262258099887, min_samples=15)
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\explainability_agent.py", line 86, in execute
+    shap_plots, shap_top_features, shap_importance = self._compute_shap(model, X, model_name)
+                                                     ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\explainability_agent.py", line 295, in _compute_shap
+    explainer = shap.Explainer(model, sample)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\venv\Lib\site-packages\shap\explainers\_explainer.py", line 217, in __init__
+    raise TypeError(
+    ...<2 lines>...
+    )
+TypeError: The passed model is not callable and cannot be analyzed directly with the given masker! Model: DBSCAN(eps=0.8116262258099887, min_samples=15)
+2026-08-05 10:12:05 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-08-05 10:12:05 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=276 user_chars=114
+2026-08-05 10:12:06 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=1693
+2026-08-05 10:12:06 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1693, starts_with="Here's a plain English explanation of the DBSCAN model's behavior:\n\n* **The mode")
+2026-08-05 10:12:06 | INFO     | emads.explainability_agent | execute() complete — top_feature=unknown shap_plots=0
+2026-08-05 10:12:06 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-08-05 10:12:06 | INFO     | emads.meta_evaluator_agent | >>> START agent=meta_evaluator_agent
+2026-08-05 10:12:06 | INFO     | emads.meta_evaluator_agent | <<< END   agent=meta_evaluator_agent  status=OK
+2026-08-05 10:12:06 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-08-05 10:12:06 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=196 user_chars=274
+2026-08-05 10:12:06 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=323
+2026-08-05 10:12:06 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-08-05 10:12:06 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:07 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:07 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:07 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:07 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:07 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:07 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:08 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:08 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-05 10:12:08 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-05 10:12:08 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-05 10:12:08 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-05 10:12:08 | DEBUG    | emads.data_understanding_agent | Loading dataset from: C:\Users\ThinkPad\AppData\Local\Temp\tmp386opq_e\dataset.csv
+2026-08-05 10:12:08 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (5, 2)
+2026-08-05 10:12:08 | ERROR    | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=ERROR  error=problem_type='clustering' requires at least 30 rows (got 5).
+Traceback (most recent call last):
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\base_agent.py", line 85, in execute_logged
+    result = self.execute(state)
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\data_understanding_agent.py", line 82, in execute
+    self._validate_row_count_for_unsupervised(df, user_problem_type)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ThinkPad\Desktop\EMADS-PFA\emads\app\core\agents\data_understanding_agent.py", line 309, in _validate_row_count_for_unsupervised
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: problem_type='clustering' requires at least 30 rows (got 5).
