@@ -16,40 +16,105 @@ import pandas as pd
 import streamlit as st
 
 # ----------------------------------------------------------------------
-# Design tokens — one consistent palette used everywhere below
+# Design tokens — one palette per mode. PRIMARY/ACCENT stay constant (brand
+# identity shouldn't shift with the theme); everything that touches a
+# background or body text swaps between the two.
 # ----------------------------------------------------------------------
 PRIMARY = "#4338CA"        # indigo — brand color, matches .streamlit/config.toml
 PRIMARY_LIGHT = "#6366F1"
-PRIMARY_SOFT = "#EEF2FF"   # tinted background for primary-colored chips
 ACCENT = "#06B6D4"         # cyan
 
-SUCCESS = "#10B981"        # emerald
-SUCCESS_SOFT = "#ECFDF5"
-WARNING = "#F59E0B"        # amber
-WARNING_SOFT = "#FFFBEB"
-ERROR = "#F87171"          # coral red
-ERROR_SOFT = "#FEF2F2"
-
-TEXT = "#1E293B"
-TEXT_MUTED = "#64748B"
-BORDER = "#E2E8F0"
-BG_CARD = "#FFFFFF"
-BG_SUBTLE = "#F8FAFC"
-
-STATUS_COLORS = {
-    "good": (SUCCESS, SUCCESS_SOFT),
-    "warn": (WARNING, WARNING_SOFT),
-    "bad": (ERROR, ERROR_SOFT),
-    None: (BORDER, BG_CARD),
+_PALETTES = {
+    "light": dict(
+        PRIMARY_SOFT="#EEF2FF",
+        SUCCESS="#10B981", SUCCESS_SOFT="#ECFDF5",
+        WARNING="#F59E0B", WARNING_SOFT="#FFFBEB",
+        ERROR="#F87171", ERROR_SOFT="#FEF2F2",
+        TEXT="#1E293B", TEXT_MUTED="#64748B",
+        BORDER="#E2E8F0", BG_CARD="#FFFFFF", BG_SUBTLE="#F8FAFC", BG_APP="#FFFFFF",
+    ),
+    "dark": dict(
+        PRIMARY_SOFT="#1E1B4B",
+        SUCCESS="#34D399", SUCCESS_SOFT="#052E22",
+        WARNING="#FBBF24", WARNING_SOFT="#3A2A05",
+        ERROR="#F87171", ERROR_SOFT="#3B1414",
+        TEXT="#E2E8F0", TEXT_MUTED="#94A3B8",
+        BORDER="#334155", BG_CARD="#1E293B", BG_SUBTLE="#0F172A", BG_APP="#0B1220",
+    ),
 }
 
+# Mutable at runtime by inject_theme() — every helper below (metric_card,
+# badge, style_* ) reads colors through this instead of a fixed module-level
+# constant, so a single call flips the whole dashboard's palette.
+_palette = dict(_PALETTES["light"])
 
-THEME_CSS = f"""
+
+def _status_colors() -> dict:
+    return {
+        "good": (_palette["SUCCESS"], _palette["SUCCESS_SOFT"]),
+        "warn": (_palette["WARNING"], _palette["WARNING_SOFT"]),
+        "bad": (_palette["ERROR"], _palette["ERROR_SOFT"]),
+        None: (_palette["BORDER"], _palette["BG_CARD"]),
+    }
+
+
+def _build_css(mode: str) -> str:
+    p = _PALETTES[mode]
+    PRIMARY_SOFT, SUCCESS, SUCCESS_SOFT = p["PRIMARY_SOFT"], p["SUCCESS"], p["SUCCESS_SOFT"]
+    WARNING, WARNING_SOFT, ERROR, ERROR_SOFT = p["WARNING"], p["WARNING_SOFT"], p["ERROR"], p["ERROR_SOFT"]
+    TEXT, TEXT_MUTED, BORDER = p["TEXT"], p["TEXT_MUTED"], p["BORDER"]
+    BG_CARD, BG_SUBTLE, BG_APP = p["BG_CARD"], p["BG_SUBTLE"], p["BG_APP"]
+
+    # Dark mode also needs to repaint Streamlit's own widgets (inputs,
+    # selects, dataframes, code blocks, ...) since .streamlit/config.toml
+    # pins a light native theme — our custom cards aren't the only surface.
+    # Streamlit's own emotion-generated classes (one per widget instance,
+    # re-rendered by React after our <style> tag is injected) win the cascade
+    # over a plain attribute selector — hence !important everywhere here,
+    # including on the sidebar itself, which otherwise stays stuck on the
+    # light secondaryBackgroundColor from .streamlit/config.toml.
+    dark_widget_overrides = f"""
+    .stApp, .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stHeader"] {{
+        background-color: {BG_APP} !important; color: {TEXT} !important;
+    }}
+    .stMarkdown, .stMarkdown p, label, .stCaption, span, p, li {{ color: {TEXT} !important; }}
+
+    /* ---- Sidebar shell + every native widget inside it ------------------ */
+    [data-testid="stSidebar"], [data-testid="stSidebarContent"],
+    [data-testid="stSidebarUserContent"] {{
+        background-color: {BG_SUBTLE} !important; color: {TEXT} !important;
+        border-right: 1px solid {BORDER};
+    }}
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
+        background-color: {BG_CARD} !important; border: 1px dashed {BORDER} !important; color: {TEXT} !important;
+    }}
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzoneInstructions"] span,
+    [data-testid="stSidebar"] small {{ color: {TEXT_MUTED} !important; }}
+    [data-testid="stSidebar"] .stButton > button, [data-testid="stSidebar"] .stDownloadButton > button {{
+        background-color: {BG_CARD} !important; color: {TEXT} !important; border: 1px solid {BORDER} !important;
+    }}
+    [data-testid="stAlert"] {{ background-color: {BG_CARD} !important; }}
+
+    div[data-testid="stMetric"] {{ background-color: {BG_CARD}; border-radius: 12px; padding: 8px; }}
+    div[data-testid="stExpander"] {{ background-color: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] > div,
+    .stTextArea textarea {{
+        background-color: {BG_CARD} !important; color: {TEXT} !important; border-color: {BORDER} !important;
+    }}
+    div[data-testid="stDataFrame"], div[data-testid="stTable"] {{ background-color: {BG_CARD}; }}
+    .stTabs [data-baseweb="tab-list"] {{ background-color: transparent; }}
+    .stTabs [data-baseweb="tab"] {{ color: {TEXT_MUTED}; }}
+    .stTabs [aria-selected="true"] {{ color: {PRIMARY}; }}
+    code {{ background-color: {BG_SUBTLE}; color: {TEXT}; }}
+    """ if mode == "dark" else ""
+
+    return f"""
 <style>
     html, body, [class*="css"] {{
         font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     }}
-    .stApp {{ background-color: #FFFFFF; }}
+    .stApp {{ background-color: {BG_APP}; }}
+    {dark_widget_overrides}
 
     /* ---- Header ------------------------------------------------------- */
     .main-header {{
@@ -163,8 +228,12 @@ THEME_CSS = f"""
 """
 
 
-def inject_theme() -> None:
-    st.markdown(THEME_CSS, unsafe_allow_html=True)
+def inject_theme(mode: str = "light") -> None:
+    """Injects the CSS for `mode` ("light" or "dark") and remembers the
+    palette so metric_card/badge/style_* render with matching colors."""
+    global _palette
+    _palette = dict(_PALETTES.get(mode, _PALETTES["light"]))
+    st.markdown(_build_css(mode if mode in _PALETTES else "light"), unsafe_allow_html=True)
 
 
 def status_from_thresholds(value: float | None, good: float, warn: float) -> str | None:
@@ -179,7 +248,8 @@ def status_from_thresholds(value: float | None, good: float, warn: float) -> str
 
 
 def metric_card(col, label: str, value, icon: str = "", status: str | None = None) -> None:
-    color, _ = STATUS_COLORS.get(status, STATUS_COLORS[None])
+    status_colors = _status_colors()
+    color, _ = status_colors.get(status, status_colors[None])
     col.markdown(f"""
         <div class="metric-card" style="--status-color: {color};">
             {f'<div class="icon">{icon}</div>' if icon else ''}
@@ -221,7 +291,7 @@ def style_model_comparison(df: pd.DataFrame, selected_model_name: str | None) ->
 
     def highlight_selected_row(row: pd.Series):
         if selected_model_name is not None and row.get("Model") == selected_model_name:
-            return [f"background-color: {PRIMARY_SOFT}; font-weight: 700;"] * len(row)
+            return [f"background-color: {_palette['PRIMARY_SOFT']}; font-weight: 700;"] * len(row)
         return [""] * len(row)
 
     styler = (
@@ -237,12 +307,13 @@ def style_metrics_table(df: pd.DataFrame, pct_cols: list[str] | None = None) -> 
     """Generic evaluation-metrics table styling: subtle row striping and
     consistent decimal/percent formatting."""
     fmt = {col: "{:.1%}" for col in (pct_cols or [])}
+    bg_card, bg_subtle = _palette["BG_CARD"], _palette["BG_SUBTLE"]
     styler = (
         df.style
         .format(fmt, na_rep="N/A")
-        .set_properties(**{"background-color": BG_CARD})
+        .set_properties(**{"background-color": bg_card, "color": _palette["TEXT"]})
         .apply(
-            lambda row: [f"background-color: {BG_SUBTLE}" if row.name % 2 else f"background-color: {BG_CARD}"] * len(row),
+            lambda row: [f"background-color: {bg_subtle if row.name % 2 else bg_card}"] * len(row),
             axis=1,
         )
     )

@@ -54,7 +54,9 @@ STEP_PREVIEW = [
     ("🧭", "Meta-Evaluation", "Audits overall run confidence."),
 ]
 
-theme.inject_theme()
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+theme.inject_theme("dark" if st.session_state.dark_mode else "light")
 
 
 def header() -> None:
@@ -84,6 +86,7 @@ PROBLEM_TYPE_OPTIONS = {
 
 
 def render_sidebar():
+    st.sidebar.toggle("🌙 Dark mode", key="dark_mode")
     st.sidebar.markdown('<div class="sidebar-section-label">📁 Dataset</div>', unsafe_allow_html=True)
     uploaded_file = st.sidebar.file_uploader("Upload a CSV dataset", type=["csv"], label_visibility="collapsed")
 

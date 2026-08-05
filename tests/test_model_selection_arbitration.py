@@ -104,24 +104,25 @@ class ModelSelectionExecuteArbitrationTests(unittest.TestCase):
     actually consumes (selected_model_name) is really driven by the parsed
     LLM recommendation, with a working, visible fallback when parsing fails."""
 
-    def _run_execute(self, llm_response: str):
+    def _run_execute(self, llm_response: str, candidates=None, fold_scores=None):
         agent = ModelSelectionAgent()
         df = pd.DataFrame({
             "f1": list(range(1, 21)),
             "target": [0, 1] * 10,
         })
-        candidates = {
-            "RandomForest": RandomForestClassifier(random_state=42),
-            "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42),
-        }
-        # Same near-identical, mixed-sign fold profile as the direct
-        # _compare_top_two tests above, keyed by real sklearn class name so
-        # cross_val_score's mock returns a fixed score regardless of the
-        # actual (irrelevant, since mocked) train/test split content.
-        fold_scores = {
-            "RandomForestClassifier": np.array([0.80, 0.82, 0.79, 0.81, 0.80]),
-            "LogisticRegression": np.array([0.81, 0.80, 0.80, 0.79, 0.81]),
-        }
+        if candidates is None:
+            candidates = {
+                "RandomForest": RandomForestClassifier(random_state=42),
+                "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42),
+            }
+        if fold_scores is None:
+            # Near-identical, mixed-sign fold profile keyed by real sklearn
+            # class name so cross_val_score's mock returns a fixed score
+            # regardless of the actual (irrelevant, since mocked) split content.
+            fold_scores = {
+                "RandomForestClassifier": np.array([0.80, 0.82, 0.79, 0.81, 0.80]),
+                "LogisticRegression": np.array([0.81, 0.80, 0.80, 0.79, 0.81]),
+            }
 
         def fake_cross_val_score(model, X, y, cv=None, scoring=None, n_jobs=None):
             return fold_scores[type(model).__name__]
@@ -152,9 +153,13 @@ class ModelSelectionExecuteArbitrationTests(unittest.TestCase):
             "interpretability and lower training cost."
         )
         self.assertEqual(result["selected_model_name"], "LogisticRegression")
+        # RandomForest (0.804) is the raw top scorer here, so this is the
+        # winner-switch case: the text must say so, not claim LogisticRegression
+        # (0.802) had the best raw score — see the regression test below.
         note = result["agent_decisions"][0].reasoning
-        self.assertIn("which recommended", note)
+        self.assertIn("selected via LLM arbitration despite NOT having the highest raw", note)
         self.assertIn("'LogisticRegression'", note)
+        self.assertNotIn("achieved the best mean", note)
 
     def test_selected_model_name_falls_back_deterministically_on_parse_failure(self):
         """An ambiguous LLM response (no valid candidate name) must not be
@@ -171,6 +176,36 @@ class ModelSelectionExecuteArbitrationTests(unittest.TestCase):
             any("could not be parsed" in entry for entry in result["logs"]),
             f"Expected a parse-failure warning in state['logs'], got: {result['logs']}",
         )
+
+    def test_reasoning_does_not_falsely_claim_best_score_for_promoted_runner_up(self):
+        """Regression test for the exact reported bug: LightGBM has the higher
+        raw CV score (~0.2778) and LogisticRegression the lower one (~0.2500);
+        when LLM arbitration promotes LogisticRegression anyway, the reasoning
+        must never claim it 'achieved the best mean accuracy' — that claim
+        would be factually false, since 0.2778 (LightGBM) is the real best."""
+        candidates = {
+            "LightGBM": RandomForestClassifier(random_state=42),
+            "LogisticRegression": LogisticRegression(max_iter=1000, random_state=42),
+        }
+        fold_scores = {
+            "RandomForestClassifier": np.array([0.30, 0.24, 0.30, 0.25, 0.30]),  # mean ≈ 0.278
+            "LogisticRegression": np.array([0.25, 0.27, 0.24, 0.26, 0.23]),      # mean = 0.250
+        }
+        result = self._run_execute(
+            "Given the statistical tie, I recommend LogisticRegression for its "
+            "simplicity and lower computational cost.",
+            candidates=candidates,
+            fold_scores=fold_scores,
+        )
+
+        raw_scores = {r["model_name"]: r["mean_score"] for r in result["candidate_models_results"]}
+        self.assertGreater(raw_scores["LightGBM"], raw_scores["LogisticRegression"])
+        self.assertEqual(result["selected_model_name"], "LogisticRegression")
+
+        note = result["agent_decisions"][0].reasoning
+        self.assertNotIn("achieved the best mean", note)
+        self.assertIn("selected via LLM arbitration despite NOT having the highest raw", note)
+        self.assertIn("'LightGBM'", note)
 
 
 if __name__ == "__main__":
