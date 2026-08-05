@@ -45,8 +45,13 @@ class SupervisorAgent:
             ("hyperparameter_optimization", HyperparameterAgent()),
             ("evaluation", EvaluationAgent()),
             ("explainability", ExplainabilityAgent()),
-            ("reporting", ReportingAgent()),
+            # meta_evaluation runs before reporting so its verdict is already
+            # in state when ReportingAgent builds the PDF payload — it never
+            # needed the PDF itself, only the metrics/explanation/arbitration
+            # signals already accumulated by this point (see
+            # MetaEvaluatorAgent's module docstring).
             ("meta_evaluation", MetaEvaluatorAgent()),
+            ("reporting", ReportingAgent()),
         ]
         self.workflow = self._build_workflow_graph()
 

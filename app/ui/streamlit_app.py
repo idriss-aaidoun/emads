@@ -50,8 +50,8 @@ STEP_PREVIEW = [
     ("🎯", "Hyperparameter Tuning", "Optuna search on the selected model."),
     ("📈", "Evaluation", "Holdout metrics + stability check."),
     ("💡", "Explainability", "SHAP, permutation importance, narration."),
-    ("📄", "Reporting", "Assembles the final PDF report."),
     ("🧭", "Meta-Evaluation", "Audits overall run confidence."),
+    ("📄", "Reporting", "Assembles the final PDF report."),
 ]
 
 if "dark_mode" not in st.session_state:

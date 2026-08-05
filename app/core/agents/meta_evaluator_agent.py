@@ -2,15 +2,19 @@
 Meta-Evaluator Agent Module
 ==============================
 
-Final agent of the pipeline — runs AFTER ReportingAgent, once the PDF has
-already been generated. Its single responsibility is to audit the completed
-run and produce a holistic confidence verdict, so a reader of the report has
-one place that tells them "how much should I trust this end-to-end?" instead
-of having to reconcile a dozen scattered per-agent confidence scores
-themselves.
+Second-to-last agent of the pipeline — runs AFTER ExplainabilityAgent but
+BEFORE ReportingAgent, so its verdict is already in state by the time the PDF
+is assembled. It only reads metrics, explanation agreement, and the
+arbitration log accumulated so far — it never needed the PDF itself, so
+running before ReportingAgent costs it nothing while letting the report
+include its verdict instead of always trailing one run behind it. Its single
+responsibility is to audit the completed analysis and produce a holistic
+confidence verdict, so a reader of the report has one place that tells them
+"how much should I trust this end-to-end?" instead of having to reconcile a
+dozen scattered per-agent confidence scores themselves.
 
-This agent NEVER re-runs a previous step. It only reads the final state and
-writes a recommendation in plain text — acting on that recommendation (e.g.
+This agent NEVER re-runs a previous step. It only reads the state and writes
+a recommendation in plain text — acting on that recommendation (e.g.
 re-running with a different target column) is left entirely to the user.
 """
 

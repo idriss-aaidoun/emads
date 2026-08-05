@@ -65,6 +65,7 @@ class ReportingAgent(BaseAgent):
             "explanation_agreement_score": state.get("explanation_agreement_score"),
             "agent_decisions": state.get("agent_decisions") or [],
             "llm_arbitration_log": state.get("llm_arbitration_log") or [],
+            "meta_evaluation": state.get("meta_evaluation"),
             "conclusion": executive_conclusion or "No conclusion available.",
         }
 
