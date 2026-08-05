@@ -319,9 +319,21 @@ class ModelSelectionAgent(BaseAgent):
             if scoring == "silhouette" else
             f"{CV_FOLDS}-fold cross-validation on the training set"
         )
+        # `best` is the final winner, which LLM arbitration can switch to the raw
+        # runner-up (see _compare_top_two) — asserting "achieved the best mean X"
+        # would then be factually false. all_results is sorted by mean_score
+        # descending before this is called, so all_results[0] is the true raw top.
+        is_raw_top_scorer = bool(all_results) and best["model_name"] == all_results[0]["model_name"]
+        if is_raw_top_scorer:
+            return (
+                f"'{best['model_name']}' achieved the best mean {metric_label} "
+                f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) via {method}. "
+                f"Other candidates scored: {comparison}."
+            )
         return (
-            f"'{best['model_name']}' achieved the best mean {metric_label} "
-            f"({best['mean_score']:.4f} ± {best['std_score']:.4f}) via {method}. "
+            f"'{best['model_name']}' scored a mean {metric_label} of {best['mean_score']:.4f} "
+            f"± {best['std_score']:.4f} via {method} — not the highest raw score among the "
+            f"candidates (see below for why it was selected anyway). "
             f"Other candidates scored: {comparison}."
         )
 
@@ -487,6 +499,23 @@ class ModelSelectionAgent(BaseAgent):
                     f"keeping the higher-CV-score model, '{final_model_name}'. The unparsed LLM response is "
                     f"included below for context only — it did not determine this selection: "
                     f"{arbitration_entry['llm_arbitration']} "
+                    f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
+                    f"precisely because the models could not be statistically distinguished."
+                )
+            raw_top_result = results[0]
+            if final_model_name != raw_top_result["model_name"]:
+                # A genuine winner switch: the LLM's recommendation promoted the
+                # raw runner-up over the raw top scorer. Must NOT be phrased as
+                # if final_model_name "achieved the best" anything — see the
+                # regression this guards: _build_reasoning previously always
+                # claimed the winner had the top raw score, which is false here.
+                return (
+                    f" '{final_model_name}' was selected via LLM arbitration despite NOT having the "
+                    f"highest raw cross-validation score (best raw score: '{raw_top_result['model_name']}' "
+                    f"at {raw_top_result['mean_score']:.4f}). The two were statistically indistinguishable "
+                    f"(Wilcoxon p={p_value:.3f}), and the LLM's recommendation favored '{final_model_name}' "
+                    f"on secondary criteria (interpretability/cost) over the marginally higher-scoring "
+                    f"alternative: {arbitration_entry['llm_arbitration']} "
                     f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                     f"precisely because the models could not be statistically distinguished."
                 )

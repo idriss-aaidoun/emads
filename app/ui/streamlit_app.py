@@ -20,21 +20,12 @@ from app.core.state.emads_state import create_initial_state, UNSUPERVISED_PROBLE
 from app.core.supervisor.supervisor_agent import SupervisorAgent
 from app.utils.file_utils import ensure_dir, prune_old_files
 import app.utils.logger as logger_utils
+from app.ui import theme
 
 # Pipeline-level logger for the UI layer
 _ui_logger = logger_utils.get_logger("emads.ui")
 
 st.set_page_config(page_title="EMADS Dashboard", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
-
-# ----------------------------------------------------------------------
-# Design tokens — one consistent palette used everywhere below
-# ----------------------------------------------------------------------
-PRIMARY = "#4338CA"     # indigo
-PRIMARY_LIGHT = "#818CF8"
-ACCENT = "#06B6D4"      # cyan
-SUCCESS = "#10B981"
-BG_CARD = "#F8FAFC"
-TEXT_MUTED = "#64748B"
 
 STEP_LABELS = {
     "data_understanding": "🔍 Understanding your data",
@@ -48,39 +39,24 @@ STEP_LABELS = {
     "meta_evaluation": "🧭 Auditing overall run confidence",
 }
 
-st.markdown(f"""
-<style>
-    .stApp {{ background-color: #0F172A; color: #E2E8F0; }}
-    .stApp * {{ color: #E2E8F0; }}
-    .main-header {{
-        background: linear-gradient(135deg, {PRIMARY} 0%, {ACCENT} 100%);
-        padding: 28px 32px; border-radius: 14px; margin-bottom: 24px;
-        border: 1px solid {PRIMARY};
-    }}
-    .main-header h1 {{ color: white; font-size: 32px; font-weight: 800; margin: 0; }}
-    .main-header p {{ color: {TEXT_MUTED}; font-size: 15px; margin-top: 4px; }}
-    .metric-card {{
-        background-color: {BG_CARD}; border-radius: 12px; padding: 18px 20px;
-        border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
-    }}
-    .metric-card .label {{ color: {TEXT_MUTED}; font-size: 12px; text-transform: uppercase;
-        letter-spacing: 0.06em; font-weight: 600; }}
-    .metric-card .value {{ color: {PRIMARY_LIGHT}; font-size: 26px; font-weight: 800; margin-top: 4px; }}
-    .section-title {{ font-size: 20px; font-weight: 700; color: {TEXT_MUTED}; margin: 18px 0 10px 0; 
-        border-bottom: 2px solid {ACCENT}; padding-bottom: 6px; display: inline-block; }}
-    .decision-card {{
-        background-color: {BG_CARD}; border-radius: 10px; padding: 14px 16px;
-        margin-bottom: 10px; border-left: 3px solid {ACCENT};
-    }}
-    .decision-agent {{ color: {PRIMARY_LIGHT}; font-weight: 700; font-size: 13px; }}
-    .decision-reason {{ color: {TEXT_MUTED}; font-size: 13px; margin-top: 4px; }}
-    .confidence-badge {{
-        display: inline-block; padding: 2px 10px; border-radius: 999px;
-        font-size: 11px; font-weight: 700; color: #064E3B; background-color: {SUCCESS};
-    }}
-    div[data-testid="stSidebar"] {{ background-color: #020617; }}
-</style>
-""", unsafe_allow_html=True)
+# Short labels + one-line descriptions for the stepper and the empty-state
+# pipeline preview — same 9 steps as STEP_LABELS/pipeline_steps, just laid
+# out for a compact card instead of a status line.
+STEP_PREVIEW = [
+    ("🔍", "Data Understanding", "Profiles columns, infers target & problem type."),
+    ("📊", "EDA", "Descriptive stats, outliers, correlation plots."),
+    ("🧹", "Preprocessing", "Cleans, imputes, encodes, scales."),
+    ("🏆", "Model Selection", "Compares candidate models via CV / silhouette."),
+    ("🎯", "Hyperparameter Tuning", "Optuna search on the selected model."),
+    ("📈", "Evaluation", "Holdout metrics + stability check."),
+    ("💡", "Explainability", "SHAP, permutation importance, narration."),
+    ("🧭", "Meta-Evaluation", "Audits overall run confidence."),
+    ("📄", "Reporting", "Assembles the final PDF report."),
+]
+
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+theme.inject_theme("dark" if st.session_state.dark_mode else "light")
 
 
 def header() -> None:
@@ -92,13 +68,8 @@ def header() -> None:
     """, unsafe_allow_html=True)
 
 
-def metric_card(col, label: str, value) -> None:
-    col.markdown(f"""
-        <div class="metric-card">
-            <div class="label">{label}</div>
-            <div class="value">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
+def metric_card(col, label: str, value, icon: str = "", status: str | None = None) -> None:
+    theme.metric_card(col, label, value, icon=icon, status=status)
 
 
 def section_title(text: str) -> None:
@@ -115,8 +86,9 @@ PROBLEM_TYPE_OPTIONS = {
 
 
 def render_sidebar():
-    st.sidebar.header("📁 Dataset")
-    uploaded_file = st.sidebar.file_uploader("Upload a CSV dataset", type=["csv"])
+    st.sidebar.toggle("🌙 Dark mode", key="dark_mode")
+    st.sidebar.markdown('<div class="sidebar-section-label">📁 Dataset</div>', unsafe_allow_html=True)
+    uploaded_file = st.sidebar.file_uploader("Upload a CSV dataset", type=["csv"], label_visibility="collapsed")
 
     local_path, target_column, problem_type = None, None, None
     if uploaded_file is not None:
@@ -127,6 +99,7 @@ def render_sidebar():
 
         try:
             preview_df = pd.read_csv(local_path, nrows=5)
+            st.sidebar.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
             st.sidebar.markdown("**Preview**")
             st.sidebar.dataframe(preview_df.head(3), use_container_width=True)
 
@@ -143,10 +116,11 @@ def render_sidebar():
                 target_column = st.sidebar.selectbox(
                     "🎯 Target column", options=columns, index=len(columns) - 1
                 )
+            st.sidebar.markdown('</div>', unsafe_allow_html=True)
         except Exception as e:
             st.sidebar.error(f"Could not read file: {e}")
 
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     is_unsupervised_choice = problem_type in UNSUPERVISED_PROBLEM_TYPES
     run_ready = uploaded_file is not None and (target_column or is_unsupervised_choice)
     run_clicked = st.sidebar.button(
@@ -156,7 +130,7 @@ def render_sidebar():
         st.sidebar.info("Upload a CSV to get started.")
 
     # ---- Log file download button ----------------------------------------
-    st.sidebar.markdown("---")
+    st.sidebar.markdown('<div class="sidebar-section-label">🛠️ Utilities</div>', unsafe_allow_html=True)
     log_file = logger_utils.get_log_file_path()
     if os.path.exists(log_file):
         with open(log_file, "rb") as _lf:
@@ -170,7 +144,6 @@ def render_sidebar():
     # -----------------------------------------------------------------------
 
     # ---- Cleanup button — logs/reports/uploads grow one file per run ------
-    st.sidebar.markdown("---")
     if st.sidebar.button("🧹 Clean old files", use_container_width=True):
         n_logs = prune_old_files("logs", keep_last=5, pattern="*.log")
         n_reports = prune_old_files("reports", keep_last=5, pattern="*.pdf")
@@ -207,6 +180,13 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str | None, pro
         initial_state["problem_type"] = problem_type
 
     supervisor = SupervisorAgent()
+    step_keys = [step_name for step_name, _ in supervisor.pipeline_steps]
+    stepper_labels = [
+        (key, f"{icon} {title}")
+        for key, (icon, title, _) in zip(step_keys, STEP_PREVIEW)
+    ]
+    stepper_box = st.empty()
+    stepper_box.markdown(theme.stepper_html(stepper_labels, current_index=0), unsafe_allow_html=True)
     progress_bar = st.progress(0, text="Starting pipeline...")
     status_box = st.empty()
 
@@ -218,6 +198,10 @@ def run_pipeline_with_progress(dataset_path: str, target_column: str | None, pro
             step_name = list(event.keys())[0]
             final_state = _merge_stream_update(final_state, event[step_name])
             label = STEP_LABELS.get(step_name, step_name)
+            stepper_box.markdown(
+                theme.stepper_html(stepper_labels, current_index=i if i < total_steps else None),
+                unsafe_allow_html=True,
+            )
             _ui_logger.info("Pipeline step completed — step=%s (%s/%s)", step_name, i, total_steps)
 
             if step_name == "eda":
@@ -292,10 +276,10 @@ def render_overview_tab(state: dict) -> None:
     render_meta_evaluation_badge(state)
     schema = state.get("schema_info") or {}
     c1, c2, c3, c4 = st.columns(4)
-    metric_card(c1, "Rows", schema.get("num_rows", "N/A"))
-    metric_card(c2, "Columns", schema.get("num_cols", "N/A"))
-    metric_card(c3, "Target", state.get("target_column") or "N/A")
-    metric_card(c4, "Problem Type", (state.get("problem_type") or "N/A").title())
+    metric_card(c1, "Rows", schema.get("num_rows", "N/A"), icon="📋")
+    metric_card(c2, "Columns", schema.get("num_cols", "N/A"), icon="🗂️")
+    metric_card(c3, "Target", state.get("target_column") or "N/A", icon="🎯")
+    metric_card(c4, "Problem Type", (state.get("problem_type") or "N/A").title(), icon="🧩")
 
     issues = schema.get("quality_issues", [])
     if issues:
@@ -395,7 +379,7 @@ def render_model_tab(state: dict) -> None:
         df = pd.DataFrame(results)[["model_name", "mean_score", "std_score"]]
         df.columns = ["Model", "Mean CV Score", "Std Dev"]
         st.dataframe(
-            df.style.highlight_max(subset=["Mean CV Score"], color=f"{ACCENT}33"),
+            theme.style_model_comparison(df, state.get("selected_model_name")),
             use_container_width=True, hide_index=True,
         )
         st.bar_chart(df.set_index("Model")["Mean CV Score"])
@@ -423,10 +407,11 @@ def render_evaluation_tab(state: dict) -> None:
 
     if "accuracy" in metrics:
         c1, c2, c3, c4 = st.columns(4)
-        metric_card(c1, "Accuracy", f"{metrics.get('accuracy', 0):.3f}")
-        metric_card(c2, "Precision", f"{metrics.get('precision', 0):.3f}")
-        metric_card(c3, "Recall", f"{metrics.get('recall', 0):.3f}")
-        metric_card(c4, "F1-score", f"{metrics.get('f1_score', 0):.3f}")
+        acc = metrics.get("accuracy", 0)
+        metric_card(c1, "Accuracy", f"{acc:.3f}", icon="🎯", status=theme.status_from_thresholds(acc, 0.8, 0.5))
+        metric_card(c2, "Precision", f"{metrics.get('precision', 0):.3f}", icon="🔎")
+        metric_card(c3, "Recall", f"{metrics.get('recall', 0):.3f}", icon="🧲")
+        metric_card(c4, "F1-score", f"{metrics.get('f1_score', 0):.3f}", icon="⚖️")
         if metrics.get("roc_auc") is not None:
             st.metric("ROC AUC", f"{metrics['roc_auc']:.3f}")
         ci_caption = ""
@@ -438,11 +423,12 @@ def render_evaluation_tab(state: dict) -> None:
         )
     elif "silhouette_score" in metrics:
         c1, c2, c3 = st.columns(3)
-        metric_card(c1, "Silhouette Score", f"{metrics.get('silhouette_score', 0):.3f}")
+        sil = metrics.get("silhouette_score", 0)
+        metric_card(c1, "Silhouette Score", f"{sil:.3f}", icon="🧩", status=theme.status_from_thresholds(sil, 0.5, 0.25))
         db = metrics.get("davies_bouldin_score")
-        metric_card(c2, "Davies-Bouldin", f"{db:.3f}" if db is not None else "N/A")
+        metric_card(c2, "Davies-Bouldin", f"{db:.3f}" if db is not None else "N/A", icon="📐")
         ch = metrics.get("calinski_harabasz_score")
-        metric_card(c3, "Calinski-Harabasz", f"{ch:.1f}" if ch is not None else "N/A")
+        metric_card(c3, "Calinski-Harabasz", f"{ch:.1f}" if ch is not None else "N/A", icon="📊")
         if "n_clusters_found" in metrics:
             st.caption(f"Clusters found: {metrics['n_clusters_found']}")
         if "anomaly_rate" in metrics:
@@ -452,10 +438,11 @@ def render_evaluation_tab(state: dict) -> None:
             )
     else:
         c1, c2, c3, c4 = st.columns(4)
-        metric_card(c1, "MAE", f"{metrics.get('mae', 0):.3f}")
-        metric_card(c2, "MSE", f"{metrics.get('mse', 0):.3f}")
-        metric_card(c3, "RMSE", f"{metrics.get('rmse', 0):.3f}")
-        metric_card(c4, "R²", f"{metrics.get('r2', 0):.3f}")
+        metric_card(c1, "MAE", f"{metrics.get('mae', 0):.3f}", icon="📉")
+        metric_card(c2, "MSE", f"{metrics.get('mse', 0):.3f}", icon="📉")
+        metric_card(c3, "RMSE", f"{metrics.get('rmse', 0):.3f}", icon="📉")
+        r2 = metrics.get("r2", 0)
+        metric_card(c4, "R²", f"{r2:.3f}", icon="📈", status=theme.status_from_thresholds(r2, 0.8, 0.5))
         if metrics.get("cv_ci_lower") is not None:
             st.caption(
                 f"Cross-validation (neg RMSE): {metrics.get('cv_mean_neg_rmse', 0):.3f} "
@@ -555,7 +542,7 @@ def render_decisions_tab(state: dict) -> None:
         return
     for d in decisions:
         confidence_html = (
-            f'<span class="confidence-badge">{d.confidence:.0%} confidence</span>'
+            theme.badge(f"{d.confidence:.0%} confidence", theme.status_from_thresholds(d.confidence, 0.8, 0.5) or "neutral")
             if d.confidence is not None else ""
         )
         st.markdown(f"""
@@ -580,6 +567,20 @@ def render_report_tab(state: dict) -> None:
             )
     else:
         st.warning("Report not generated yet.")
+
+
+def render_empty_state() -> None:
+    st.info("👈 Upload a dataset and click **Run EMADS Pipeline** to get started.")
+    section_title("What EMADS does, step by step")
+    cards = "".join(
+        f'<div class="step-preview-card">'
+        f'<span class="step-num">{i}</span>'
+        f'<div class="step-title">{icon} {title}</div>'
+        f'<div class="step-desc">{desc}</div>'
+        f'</div>'
+        for i, (icon, title, desc) in enumerate(STEP_PREVIEW, start=1)
+    )
+    st.markdown(f'<div class="step-preview-grid">{cards}</div>', unsafe_allow_html=True)
 
 
 def main() -> None:
@@ -614,7 +615,7 @@ def main() -> None:
         with tabs[7]: render_decisions_tab(state)
         with tabs[8]: render_report_tab(state)
     elif not run_clicked:
-        st.info("👈 Upload a dataset and click **Run EMADS Pipeline** to get started.")
+        render_empty_state()
 
 
 if __name__ == "__main__":
