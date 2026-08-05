@@ -10,6 +10,24 @@ one, and explains WHY it was chosen over the alternatives — the core
 XGBoost and LightGBM are used only if installed; the agent degrades
 gracefully to scikit-learn-only candidates otherwise, so the pipeline never
 breaks because of an optional dependency.
+
+On CV_FOLDS=10 (see the constant below): the Wilcoxon signed-rank test in
+_compare_top_two() has a hard mathematical floor on how small its exact
+p-value can get, driven purely by the number of paired per-fold scores (n),
+regardless of how large the true difference between two models is —
+p_min = 2 * (1/2)^n (both-tailed, all n folds agreeing unanimously). At
+n=5 (the previous CV_FOLDS), p_min = 2*(1/2)^5 = 0.0625, which is already
+ABOVE the 0.05 significance threshold — meaning the test could never be
+significant even when every single fold agreed, silently forcing every
+comparison into LLM arbitration regardless of how decisive the real gap
+was. n=6 is the bare minimum to make p_min=0.03125 dip below 0.05, but that
+only covers the perfect-agreement case — real per-fold noise means most
+genuine differences would still average out to non-significance at n=6.
+n=10 gives p_min = 2*(1/2)^10 = 0.00195, leaving real statistical headroom
+below 0.05 for the test to actually detect a true difference instead of
+being floor-bound, at negligible extra wall-clock cost (measured: ~15s
+either way for a 5-candidate regression comparison at 400 AND 5,000 rows,
+since folds parallelize across cores via cross_val_score's n_jobs=-1).
 """
 
 import numpy as np
@@ -29,8 +47,16 @@ from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 from app.services.llm_service import LLMService
 
-CV_FOLDS = 5
+CV_FOLDS = 10
 RANDOM_STATE = 42
+
+# Above 0.05 (the significance threshold), a p-value in this range means
+# arbitration was triggered by a NARROW statistical margin — the models came
+# close to being distinguishable — rather than a deep, unambiguous tie
+# (e.g. p=0.812). confidence = 1 - p_value can look reassuringly high right
+# next to a tie-break narrative in this band (e.g. p=0.062 -> 94%), which
+# reads as contradictory unless the reasoning explicitly says so.
+NARROW_MARGIN_P_THRESHOLD = 0.15
 
 # Default configs used ONLY for the family-vs-family comparison below — the
 # winning algorithm's real hyperparameters are tuned afterwards by
@@ -480,12 +506,31 @@ class ModelSelectionAgent(BaseAgent):
             return name_b
         return name_a
 
+    def _narrow_margin_note(self, p_value: float) -> str:
+        """
+        Flags the specific case that makes confidence=1-p_value read as
+        contradictory: p just above 0.05 (arbitration triggered) still
+        produces a HIGH confidence number, which looks wrong sitting next to
+        a tie-break narrative unless it's made explicit that "arbitrated"
+        does not mean "deeply ambiguous" — p=0.062 and p=0.812 both trigger
+        arbitration, but only one of them was actually close to being
+        statistically decisive.
+        """
+        if p_value < NARROW_MARGIN_P_THRESHOLD:
+            return (
+                " Note: this p-value is close to the significance threshold — the "
+                "arbitration was triggered by a narrow statistical margin, not by a "
+                "fundamentally ambiguous case."
+            )
+        return ""
+
     def _build_significance_note(
         self, p_value: float, results: List[Dict[str, Any]],
         arbitration_entry: Optional[Dict[str, Any]], final_model_name: str,
     ) -> str:
         other_name = results[1]["model_name"] if results[0]["model_name"] == final_model_name else results[0]["model_name"]
         if arbitration_entry:
+            narrow_margin_note = self._narrow_margin_note(p_value)
             if arbitration_entry.get("parsed_recommendation") is None:
                 # _compare_top_two() couldn't find either candidate's name in the
                 # LLM's response, so it fell back to the higher-CV-score model —
@@ -501,6 +546,7 @@ class ModelSelectionAgent(BaseAgent):
                     f"{arbitration_entry['llm_arbitration']} "
                     f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                     f"precisely because the models could not be statistically distinguished."
+                    f"{narrow_margin_note}"
                 )
             raw_top_result = results[0]
             if final_model_name != raw_top_result["model_name"]:
@@ -518,6 +564,7 @@ class ModelSelectionAgent(BaseAgent):
                     f"alternative: {arbitration_entry['llm_arbitration']} "
                     f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                     f"precisely because the models could not be statistically distinguished."
+                    f"{narrow_margin_note}"
                 )
             return (
                 f" A Wilcoxon signed-rank test on the per-fold scores found no statistically significant "
@@ -527,6 +574,7 @@ class ModelSelectionAgent(BaseAgent):
                 f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                 f"precisely because the models could not be statistically distinguished. The LLM "
                 f"arbitration above explains the tie-break reasoning."
+                f"{narrow_margin_note}"
             )
         return (
             f" A Wilcoxon signed-rank test on the per-fold scores confirms this winner over the "

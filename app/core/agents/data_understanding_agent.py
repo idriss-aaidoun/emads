@@ -6,8 +6,12 @@ First agent of the EMADS pipeline. Loads the raw dataset and builds a
 complete structural profile of it: column types, missing values, target
 column, problem type (classification/regression), and data quality issues.
 
-This agent is fully deterministic (no LLM calls) — its job is to describe
-facts about the data, not to interpret them narratively. The EDA Agent
+This agent is deterministic except for one conditional LLM arbitration path
+(target detection fallback): if no target was specified and no column name
+matches a common convention, the LLM is asked to suggest a more plausible
+target than blindly assuming "last column" (see _arbitrate_target_column).
+Every other decision here is a description of facts about the data, not an
+interpretation of them — that narrative layer is the EDA Agent's job, which
 picks up from here to generate visual + LLM explanations.
 """
 
@@ -247,17 +251,37 @@ class DataUnderstandingAgent(BaseAgent):
         }
 
         if suggested_column and suggested_column in df.columns:
+            # We never ask the LLM to rate its own suggestion (unreproducible,
+            # uncalibrated) — instead we cross-check it the same way the pure
+            # fallback already judges "last column": unique/row ratio on the
+            # SUGGESTED column itself. Few unique values relative to row count
+            # looks like a genuine class label; near-every-value-unique looks
+            # like an ID/free-text column the LLM picked up on for the wrong
+            # reason. This reuses the fallback formula's exact slope (0.4) —
+            # same sensitivity to the ratio — but on a higher [0.5, 0.75] band
+            # instead of [0.15, 0.55]: an LLM-endorsed column that ALSO looks
+            # structurally target-like is corroborated by two independent
+            # signals (semantic name-based reasoning + structural shape), so
+            # its ceiling sits above anything the blind fallback alone can
+            # reach (0.55) but below an unambiguous common-name match (0.9),
+            # which is a stronger, more literal signal. Its floor (0.5) is
+            # still above the fallback's worst case (0.15) — even a
+            # structurally weak suggestion carries more evidence than picking
+            # the last column with no signal at all.
+            n_rows = len(df)
+            unique_ratio_suggested = df[suggested_column].nunique(dropna=True) / n_rows if n_rows else 1.0
+            confidence = max(0.5, min(0.75, 0.75 - unique_ratio_suggested * 0.4))
             return suggested_column, self.decide(
                 decision=f"Selected '{suggested_column}' as target column (LLM arbitration)",
                 reasoning=(
                     f"No target was specified and no column matched a common target name, so the "
                     f"LLM was asked to suggest a more plausible target from the column names than "
                     f"the last-column fallback ('{fallback}', unique/row ratio={unique_ratio:.2f}, "
-                    f"fallback confidence={fallback_confidence:.2f}). It proposed '{suggested_column}', "
-                    "which is a real column in the dataset — used instead. This should still be "
-                    "confirmed by the user."
+                    f"fallback confidence={fallback_confidence:.2f}). It proposed '{suggested_column}' "
+                    f"(unique/row ratio={unique_ratio_suggested:.2f}), which is a real column in the "
+                    "dataset — used instead. This should still be confirmed by the user."
                 ),
-                confidence=0.6,
+                confidence=confidence,
             ), arbitration_entry
 
         return fallback, self.decide(
