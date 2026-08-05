@@ -1,9 +1,0 @@
-2026-08-05 10:42:52 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
-2026-08-05 10:42:52 | INFO     | emads.llm | Groq client initialized successfully.
-2026-08-05 10:42:52 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
-2026-08-05 10:42:52 | INFO     | emads.data_understanding_agent | execute() started
-2026-08-05 10:42:52 | DEBUG    | emads.data_understanding_agent | Loading dataset from: data/uploads/ambiguous_survey_v2.csv
-2026-08-05 10:42:52 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (45, 5)
-2026-08-05 10:42:52 | DEBUG    | emads.data_understanding_agent | [TEMP DIAGNOSTIC] fallback='satisfaction_rating' unique_ratio=0.111111 confidence=0.505556 threshold=0.500000 triggers_arbitration=False
-2026-08-05 10:42:52 | INFO     | emads.data_understanding_agent | execute() complete — rows=45 cols=5 target='satisfaction_rating' problem_type='classification' quality_issues=0
-2026-08-05 10:42:52 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK

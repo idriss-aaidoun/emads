@@ -179,6 +179,17 @@ class ModelSelectionAgent(BaseAgent):
             # uncertainty, arbitration or not, and confidence should say so
             # plainly rather than dress it up.
             confidence = float(min(0.99, 1 - p_value))
+        elif is_unsupervised:
+            # _confidence_from_margin() (below) uses the same unfounded
+            # "0.5 + margin*10" shape that was explicitly rejected for
+            # arbitrated ties (see git history / _confidence_from_margin's
+            # own docstring reference) — reusing it here for clustering/
+            # anomaly_detection would just relocate the same problem rather
+            # than fix it. Silhouette is a real, bounded [-1, 1] statistic,
+            # so the gap between the winner and runner-up is at least a
+            # grounded quantity, even though — unlike 1-p_value — it is not
+            # a statistical test with a formal null hypothesis.
+            confidence = self._confidence_from_unsupervised_margin(results)
         else:
             confidence = self._confidence_from_margin(results)
         selection_decision = self.decide(
@@ -304,6 +315,18 @@ class ModelSelectionAgent(BaseAgent):
         inlier(1)/outlier(-1) partition rather than inventing a third metric
         family — imperfect on an imbalanced partition, but there is no ground
         truth available to do better with.
+
+        This is intentional and consistent across the whole unsupervised
+        path, not a one-off shortcut: HyperparameterAgent.execute()'s
+        `X_train = df.copy()` (its unsupervised branch — same variable name
+        as the supervised branch's real split, but here it IS the full
+        dataset) and EvaluationAgent._evaluate_unsupervised() both fit on
+        the same full preprocessed dataset for the identical reason. There
+        is no held-out split anywhere in the unsupervised pipeline —
+        selection, tuning, and evaluation all score on the same data, since
+        clustering/anomaly detection has no train/test-split concept to
+        hold one out against (see EvaluationAgent's own docstring for the
+        same point from evaluation's side).
         """
         results: List[Dict[str, Any]] = []
         for model_name, model in candidates.items():
@@ -365,13 +388,15 @@ class ModelSelectionAgent(BaseAgent):
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
         """
-        Fallback confidence for comparisons the Wilcoxon test in
-        _compare_top_two() cannot cover — a single candidate, or the
-        unsupervised branch, which fits once instead of via k-fold CV and so
-        has no per-fold scores to run a signed-rank test on. Reflects how
-        clearly the winner beat the runner-up, not just the raw score: a
-        close race between the top 2 models means the choice is less
-        "confident" even if the winning score is high.
+        Fallback confidence for the single-candidate case (nothing to
+        compare against, so no Wilcoxon and no margin possible) — the
+        unsupervised branch has its own dedicated
+        _confidence_from_unsupervised_margin() instead of this method (see
+        its docstring for why: accuracy/RMSE margins here aren't bounded the
+        way silhouette is, so the same clamp constants don't carry over).
+        Reflects how clearly the winner beat the runner-up, not just the raw
+        score: a close race between the top 2 models means the choice is
+        less "confident" even if the winning score is high.
         """
         if len(results) < 2:
             return 0.9
@@ -380,6 +405,39 @@ class ModelSelectionAgent(BaseAgent):
         # Normalize: a margin >= 0.05 (5 accuracy points, or 0.05 RMSE units) is
         # treated as a clearly confident win.
         return float(min(0.95, 0.5 + margin * 10))
+
+    def _confidence_from_unsupervised_margin(self, results: List[Dict[str, Any]]) -> float:
+        """
+        Heuristic (NOT a statistical test) confidence for the unsupervised
+        branch. _compare_top_two()'s Wilcoxon signed-rank test requires
+        per-fold scores (see its fold_scores guard); _score_candidates_
+        unsupervised() only ever fits once per candidate (no CV — DBSCAN and
+        LocalOutlierFactor(novelty=False) have no out-of-sample .predict()),
+        so there are no per-fold scores to test and no p-value can exist
+        here. This is a substitute measure, not a replacement test.
+
+        It is grounded in the one real signal available: the gap between the
+        winner's and runner-up's silhouette score (used as `mean_score` for
+        BOTH clustering and anomaly_detection — see
+        _score_candidates_unsupervised's docstring; anomaly_detection reuses
+        the same silhouette metric on the inlier/outlier partition, there is
+        no separate "contamination score" computed per candidate to use
+        instead). Silhouette is bounded to [-1, 1], so a gap is a real,
+        interpretable quantity — unlike the flat "0.5 + margin*10" formula
+        this project already rejected for accuracy/RMSE margins in
+        arbitrated ties (see _confidence_from_margin's docstring and git
+        history), which had no such bound to justify its scaling constant.
+
+        A gap of 0.2 (10% of silhouette's full [-1, 1] range) is treated as
+        a clearly cleaner separation for the winner, reaching the ceiling;
+        no gap (a tie) sits at the floor — arbitrary thresholds, but
+        documented ones, not a disguised statistical claim.
+        """
+        if len(results) < 2:
+            return 0.9
+        best_score, second_score = results[0]["mean_score"], results[1]["mean_score"]
+        gap = best_score - second_score  # results is sorted descending, so gap >= 0
+        return float(max(0.5, min(0.95, 0.5 + gap * 2.25)))
 
     def _compare_top_two(
         self, results: List[Dict[str, Any]]
