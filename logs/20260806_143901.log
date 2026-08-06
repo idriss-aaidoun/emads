@@ -1,0 +1,57 @@
+2026-08-06 14:39:01 | INFO     | emads.ui | Pipeline run started — dataset=fraud_extreme.csv target_column=None
+2026-08-06 14:39:02 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-06 14:39:02 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-06 14:39:02 | DEBUG    | emads.data_understanding_agent | Loading dataset from: data\uploads\fraud_extreme.csv
+2026-08-06 14:39:02 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (2500, 10)
+2026-08-06 14:39:02 | INFO     | emads.data_understanding_agent | execute() complete — rows=2500 cols=10 target='None' problem_type='anomaly_detection' quality_issues=0
+2026-08-06 14:39:02 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-06 14:39:02 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/9)
+2026-08-06 14:39:02 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-06 14:39:02 | INFO     | emads.eda_agent | execute() started
+2026-08-06 14:39:02 | DEBUG    | emads.eda_agent | Reading dataset from: data\uploads\fraud_extreme.csv
+2026-08-06 14:39:05 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-06 14:39:05 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1178, starts_with="Here's a concise summary of the dataset based on the provided schema statistics:")
+2026-08-06 14:39:05 | INFO     | emads.eda_agent | execute() complete — plots=7 outlier_cols=10
+2026-08-06 14:39:05 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK
+2026-08-06 14:39:05 | INFO     | emads.ui | Pipeline step completed — step=eda (2/9)
+2026-08-06 14:39:05 | INFO     | emads.ui | LLM payload — eda_summary chars=1178 starts_with="Here's a concise summary of the dataset based on the provided schema statistics:"
+2026-08-06 14:39:05 | INFO     | emads.preprocessing_agent | >>> START agent=preprocessing_agent
+2026-08-06 14:39:05 | INFO     | emads.preprocessing_agent | execute() started
+2026-08-06 14:39:05 | DEBUG    | emads.preprocessing_agent | Loading dataset from: data\uploads\fraud_extreme.csv
+2026-08-06 14:39:05 | INFO     | emads.preprocessing_agent | execute() complete — final_shape=(2500, 10) dropped=0 imputed=0 encoded=0 scaling=StandardScaler
+2026-08-06 14:39:05 | DEBUG    | emads.preprocessing_agent | Cleaned dataset saved to: data\outputs\clean_dataset.csv
+2026-08-06 14:39:05 | INFO     | emads.preprocessing_agent | <<< END   agent=preprocessing_agent  status=OK
+2026-08-06 14:39:05 | INFO     | emads.ui | Pipeline step completed — step=preprocessing (3/9)
+2026-08-06 14:39:05 | INFO     | emads.model_selection_agent | >>> START agent=model_selection_agent
+2026-08-06 14:39:05 | INFO     | emads.model_selection_agent | execute() started
+2026-08-06 14:39:05 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: data\outputs\clean_dataset.csv
+2026-08-06 14:39:06 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=IsolationForest score=0.3944
+2026-08-06 14:39:06 | INFO     | emads.model_selection_agent | <<< END   agent=model_selection_agent  status=OK
+2026-08-06 14:39:06 | INFO     | emads.ui | Pipeline step completed — step=model_selection (4/9)
+2026-08-06 14:39:06 | INFO     | emads.ui | LLM payload — model_selection_summary chars=0 starts_with=''
+2026-08-06 14:39:06 | INFO     | emads.hyperparameter_agent | >>> START agent=hyperparameter_agent
+2026-08-06 14:39:18 | INFO     | emads.hyperparameter_agent | <<< END   agent=hyperparameter_agent  status=OK
+2026-08-06 14:39:18 | INFO     | emads.ui | Pipeline step completed — step=hyperparameter_optimization (5/9)
+2026-08-06 14:39:18 | INFO     | emads.evaluation_agent | >>> START agent=evaluation_agent
+2026-08-06 14:39:18 | INFO     | emads.evaluation_agent | execute() started
+2026-08-06 14:39:19 | INFO     | emads.evaluation_agent | Evaluation metrics: {'silhouette_score': 0.5493431994834127, 'davies_bouldin_score': 0.8359555545023909, 'calinski_harabasz_score': 193.9590050453136, 'n_anomalies_detected': 29, 'anomaly_rate': 0.0116}
+2026-08-06 14:39:19 | INFO     | emads.evaluation_agent | <<< END   agent=evaluation_agent  status=OK
+2026-08-06 14:39:19 | INFO     | emads.ui | Pipeline step completed — step=evaluation (6/9)
+2026-08-06 14:39:19 | INFO     | emads.explainability_agent | >>> START agent=explainability_agent
+2026-08-06 14:39:19 | INFO     | emads.explainability_agent | execute() started
+2026-08-06 14:39:19 | DEBUG    | emads.explainability_agent | Loading data from data\outputs\clean_dataset.csv and model from data\outputs\models\selected_model.pkl
+2026-08-06 14:39:19 | INFO     | emads.explainability_agent | Skipping SHAP/native feature importance — problem_type='anomaly_detection' is unsupervised.
+2026-08-06 14:39:19 | INFO     | emads.explainability_agent | Calling LLM for explainability summary (model=llama-3.1-8b-instant)
+2026-08-06 14:39:20 | INFO     | emads.explainability_agent | LLM explainability response received (chars=1974, starts_with="Here's a plain English explanation of the IsolationForest model's behavior:\n\n* *")
+2026-08-06 14:39:20 | INFO     | emads.explainability_agent | execute() complete — top_feature=unknown shap_plots=0
+2026-08-06 14:39:20 | INFO     | emads.explainability_agent | <<< END   agent=explainability_agent  status=OK
+2026-08-06 14:39:20 | INFO     | emads.ui | Pipeline step completed — step=explainability (7/9)
+2026-08-06 14:39:20 | INFO     | emads.ui | LLM payload — explainability_summary chars=1974 starts_with="Here's a plain English explanation of the IsolationForest model's behavior:\n\n* *"
+2026-08-06 14:39:20 | INFO     | emads.meta_evaluator_agent | >>> START agent=meta_evaluator_agent
+2026-08-06 14:39:20 | INFO     | emads.meta_evaluator_agent | <<< END   agent=meta_evaluator_agent  status=OK
+2026-08-06 14:39:20 | INFO     | emads.ui | Pipeline step completed — step=meta_evaluation (8/9)
+2026-08-06 14:39:20 | INFO     | emads.reporting_agent | >>> START agent=reporting_agent
+2026-08-06 14:39:21 | INFO     | emads.reporting_agent | <<< END   agent=reporting_agent  status=OK
+2026-08-06 14:39:21 | INFO     | emads.ui | Pipeline step completed — step=reporting (9/9)
+2026-08-06 14:39:21 | INFO     | emads.ui | Reporting output — report_path=reports\EMADS_Report_20260806_143901.pdf
+2026-08-06 14:39:21 | INFO     | emads.ui | Pipeline run completed successfully.
