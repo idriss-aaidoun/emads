@@ -596,6 +596,23 @@ def render_report_tab(state: dict) -> None:
     else:
         st.warning("Report not generated yet.")
 
+    model_path = state.get("model_path")
+    if model_path and os.path.exists(model_path):
+        model_name = state.get("selected_model_name") or "model"
+        session_id = state.get("session_id") or "session"
+        model_file_name = f"{model_name}_model_{session_id}.pkl"
+        st.success(f"Trained model ready: `{model_name}`")
+        with open(model_path, "rb") as f:
+            st.download_button(
+                "⬇️ Download Trained Model (.pkl)", data=f.read(),
+                file_name=model_file_name, mime="application/octet-stream",
+                use_container_width=True,
+            )
+        st.caption(
+            "Download the trained model to use it in your own Python environment. "
+            "Load it with: `import pickle; model = pickle.load(open('model.pkl', 'rb'))`"
+        )
+
 
 def render_empty_state() -> None:
     st.info("👈 Upload a dataset and click **Run EMADS Pipeline** to get started.")
