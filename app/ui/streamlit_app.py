@@ -91,6 +91,7 @@ def render_sidebar():
     uploaded_file = st.sidebar.file_uploader("Upload a CSV dataset", type=["csv"], label_visibility="collapsed")
 
     local_path, target_column, problem_type = None, None, None
+    preview_loaded = False
     if uploaded_file is not None:
         upload_dir = ensure_dir("uploads")
         local_path = os.path.join(upload_dir, uploaded_file.name)
@@ -109,20 +110,29 @@ def render_sidebar():
             if problem_type in UNSUPERVISED_PROBLEM_TYPES:
                 st.sidebar.caption("Unsupervised problem type — no target column needed; every column is used as a feature.")
             else:
-                # Defaults to the last column, matching DataUnderstandingAgent's
-                # own fallback heuristic when no target is specified — the user
-                # can still override it via the selectbox.
+                # Same pattern as the problem-type selectbox above: "Auto-detect"
+                # is the default, first option, mapped to None — so when the
+                # user leaves it untouched, target_column stays None all the
+                # way to create_initial_state(), and DataUnderstandingAgent
+                # runs its own detection (common name match, or the fallback
+                # + LLM arbitration) instead of the UI silently forcing a
+                # column choice on every run.
                 columns = list(preview_df.columns)
-                target_column = st.sidebar.selectbox(
-                    "🎯 Target column", options=columns, index=len(columns) - 1
-                )
+                target_options = {"🔍 Auto-detect (recommended)": None}
+                target_options.update({col: col for col in columns})
+                target_label = st.sidebar.selectbox("🎯 Target column", options=list(target_options.keys()))
+                target_column = target_options[target_label]
             st.sidebar.markdown('</div>', unsafe_allow_html=True)
+            preview_loaded = True
         except Exception as e:
             st.sidebar.error(f"Could not read file: {e}")
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    is_unsupervised_choice = problem_type in UNSUPERVISED_PROBLEM_TYPES
-    run_ready = uploaded_file is not None and (target_column or is_unsupervised_choice)
+    # target_column=None is now a legitimate choice (Auto-detect) for
+    # supervised problems too, not just for unsupervised ones — so readiness
+    # only depends on having a usable preview, not on target_column being
+    # truthy (DataUnderstandingAgent handles a None target column itself).
+    run_ready = preview_loaded
     run_clicked = st.sidebar.button(
         "⚡ Run EMADS Pipeline", use_container_width=True, type="primary", disabled=not run_ready
     )
@@ -272,6 +282,17 @@ def render_meta_evaluation_badge(state: dict) -> None:
         st.warning(f"{badge} — overall confidence: {score_text}\n\n{recommendation}")
 
 
+def _find_target_decision(state: dict):
+    """Locates DataUnderstandingAgent's target-column AgentDecision, so the
+    Overview tab can tell the user what was picked FOR them (Auto-detect)
+    versus what they picked themselves — both cases produce a decision here,
+    but only the former is worth calling out with its confidence."""
+    for d in state.get("agent_decisions") or []:
+        if d.agent_name == "data_understanding_agent" and "target column" in d.decision.lower():
+            return d
+    return None
+
+
 def render_overview_tab(state: dict) -> None:
     render_meta_evaluation_badge(state)
     schema = state.get("schema_info") or {}
@@ -280,6 +301,13 @@ def render_overview_tab(state: dict) -> None:
     metric_card(c2, "Columns", schema.get("num_cols", "N/A"), icon="🗂️")
     metric_card(c3, "Target", state.get("target_column") or "N/A", icon="🎯")
     metric_card(c4, "Problem Type", (state.get("problem_type") or "N/A").title(), icon="🧩")
+
+    target_decision = _find_target_decision(state)
+    if target_decision is not None and "user-specified" not in target_decision.decision.lower():
+        confidence_text = (
+            f" ({target_decision.confidence:.0%} confidence)" if target_decision.confidence is not None else ""
+        )
+        st.caption(f"🔍 Target auto-detected{confidence_text}: {target_decision.reasoning}")
 
     issues = schema.get("quality_issues", [])
     if issues:
@@ -568,6 +596,23 @@ def render_report_tab(state: dict) -> None:
     else:
         st.warning("Report not generated yet.")
 
+    model_path = state.get("model_path")
+    if model_path and os.path.exists(model_path):
+        model_name = state.get("selected_model_name") or "model"
+        session_id = state.get("session_id") or "session"
+        model_file_name = f"{model_name}_model_{session_id}.pkl"
+        st.success(f"Trained model ready: `{model_name}`")
+        with open(model_path, "rb") as f:
+            st.download_button(
+                "⬇️ Download Trained Model (.pkl)", data=f.read(),
+                file_name=model_file_name, mime="application/octet-stream",
+                use_container_width=True,
+            )
+        st.caption(
+            "Download the trained model to use it in your own Python environment. "
+            "Load it with: `import pickle; model = pickle.load(open('model.pkl', 'rb'))`"
+        )
+
 
 def render_empty_state() -> None:
     st.info("👈 Upload a dataset and click **Run EMADS Pipeline** to get started.")
@@ -586,9 +631,11 @@ def render_empty_state() -> None:
 def main() -> None:
     header()
     local_path, target_column, problem_type, run_clicked = render_sidebar()
-    is_unsupervised_choice = problem_type in UNSUPERVISED_PROBLEM_TYPES
 
-    if run_clicked and local_path and (target_column or is_unsupervised_choice):
+    # target_column=None is a valid, deliberate choice here (Auto-detect) —
+    # render_sidebar()'s run_ready already gates the button on having a
+    # usable preview, so reaching here with run_clicked=True is enough.
+    if run_clicked and local_path:
         final_state = run_pipeline_with_progress(local_path, target_column, problem_type)
         if final_state:
             st.session_state["final_state"] = final_state

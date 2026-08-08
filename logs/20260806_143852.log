@@ -1,0 +1,15 @@
+2026-08-06 14:38:52 | INFO     | emads.ui | Pipeline run started — dataset=fraud_extreme.csv target_column=None
+2026-08-06 14:38:54 | INFO     | emads.data_understanding_agent | >>> START agent=data_understanding_agent
+2026-08-06 14:38:54 | INFO     | emads.data_understanding_agent | execute() started
+2026-08-06 14:38:54 | DEBUG    | emads.data_understanding_agent | Loading dataset from: data\uploads\fraud_extreme.csv
+2026-08-06 14:38:54 | DEBUG    | emads.data_understanding_agent | Dataset loaded — shape: (2500, 10)
+2026-08-06 14:38:54 | INFO     | emads.data_understanding_agent | execute() complete — rows=2500 cols=10 target='None' problem_type='anomaly_detection' quality_issues=0
+2026-08-06 14:38:54 | INFO     | emads.data_understanding_agent | <<< END   agent=data_understanding_agent  status=OK
+2026-08-06 14:38:54 | INFO     | emads.ui | Pipeline step completed — step=data_understanding (1/9)
+2026-08-06 14:38:54 | INFO     | emads.eda_agent | >>> START agent=eda_agent
+2026-08-06 14:38:54 | INFO     | emads.eda_agent | execute() started
+2026-08-06 14:38:54 | DEBUG    | emads.eda_agent | Reading dataset from: data\uploads\fraud_extreme.csv
+2026-08-06 14:38:56 | INFO     | emads.eda_agent | Calling LLM for EDA summary (model=llama-3.1-8b-instant)
+2026-08-06 14:38:57 | INFO     | emads.eda_agent | LLM EDA summary received (chars=1330, starts_with="Here's a concise summary of the dataset's characteristics:\n\n* **Dataset Shape:**")
+2026-08-06 14:38:57 | INFO     | emads.eda_agent | execute() complete — plots=7 outlier_cols=10
+2026-08-06 14:38:57 | INFO     | emads.eda_agent | <<< END   agent=eda_agent  status=OK

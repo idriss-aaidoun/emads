@@ -75,24 +75,46 @@ class ExplainabilityAgent(BaseAgent):
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
-        feature_importance = self._compute_feature_importance(model, X.columns)
         permutation_importance = state.get("permutation_importance") or {}
 
         shap_plots = []
         shap_top_features = []
         shap_importance = {}
-        try:
-            self.logger.info("Computing SHAP values (model=%s sample_size=%s)", model_name, SHAP_SAMPLE_SIZE)
-            shap_plots, shap_top_features, shap_importance = self._compute_shap(model, X, model_name)
-            self.logger.info("SHAP computation successful — top_features=%s", shap_top_features)
-        except Exception as exc:
-            # SHAP can fail on unusual model/data combinations; the agent
-            # should still return the feature importance it already has
-            # instead of crashing the whole pipeline over an optional analysis.
-            self.logger.warning("SHAP computation skipped: %s", exc, exc_info=True)
-            state_note = self.log(f"SHAP computation skipped due to error: {exc}")
+        if is_unsupervised:
+            # Explicit, primary guard — not just an incidental side-effect of
+            # the try/except below. SHAP and native feature importance both
+            # explain a model's PREDICTION for a given input relative to a
+            # baseline; clustering/anomaly detection models have no such
+            # prediction target (fit_predict assigns a cluster/inlier-outlier
+            # label, not a value SHAP can attribute contributions toward), so
+            # skipping here is a deliberate design decision, not a fallback
+            # for an expected failure. The try/except around _compute_shap
+            # below still exists as a secondary safety net for supervised
+            # models with unusual model/data combinations — it is no longer
+            # the only thing preventing SHAP from running on an unsupervised
+            # model.
+            feature_importance = {}
+            self.logger.info(
+                "Skipping SHAP/native feature importance — problem_type='%s' is unsupervised.", problem_type,
+            )
+            state_note = self.log(
+                "SHAP/native feature importance are not meaningful for unsupervised models "
+                "without a prediction target — skipped by design, not by failure."
+            )
         else:
-            state_note = self.log(f"Computed SHAP values on a sample of {SHAP_SAMPLE_SIZE} rows.")
+            feature_importance = self._compute_feature_importance(model, X.columns)
+            try:
+                self.logger.info("Computing SHAP values (model=%s sample_size=%s)", model_name, SHAP_SAMPLE_SIZE)
+                shap_plots, shap_top_features, shap_importance = self._compute_shap(model, X, model_name)
+                self.logger.info("SHAP computation successful — top_features=%s", shap_top_features)
+            except Exception as exc:
+                # SHAP can fail on unusual model/data combinations; the agent
+                # should still return the feature importance it already has
+                # instead of crashing the whole pipeline over an optional analysis.
+                self.logger.warning("SHAP computation skipped: %s", exc, exc_info=True)
+                state_note = self.log(f"SHAP computation skipped due to error: {exc}")
+            else:
+                state_note = self.log(f"Computed SHAP values on a sample of {SHAP_SAMPLE_SIZE} rows.")
 
         arbitration_log = []
         agreement_score = None

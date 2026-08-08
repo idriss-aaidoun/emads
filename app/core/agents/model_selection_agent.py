@@ -10,6 +10,24 @@ one, and explains WHY it was chosen over the alternatives — the core
 XGBoost and LightGBM are used only if installed; the agent degrades
 gracefully to scikit-learn-only candidates otherwise, so the pipeline never
 breaks because of an optional dependency.
+
+On CV_FOLDS=10 (see the constant below): the Wilcoxon signed-rank test in
+_compare_top_two() has a hard mathematical floor on how small its exact
+p-value can get, driven purely by the number of paired per-fold scores (n),
+regardless of how large the true difference between two models is —
+p_min = 2 * (1/2)^n (both-tailed, all n folds agreeing unanimously). At
+n=5 (the previous CV_FOLDS), p_min = 2*(1/2)^5 = 0.0625, which is already
+ABOVE the 0.05 significance threshold — meaning the test could never be
+significant even when every single fold agreed, silently forcing every
+comparison into LLM arbitration regardless of how decisive the real gap
+was. n=6 is the bare minimum to make p_min=0.03125 dip below 0.05, but that
+only covers the perfect-agreement case — real per-fold noise means most
+genuine differences would still average out to non-significance at n=6.
+n=10 gives p_min = 2*(1/2)^10 = 0.00195, leaving real statistical headroom
+below 0.05 for the test to actually detect a true difference instead of
+being floor-bound, at negligible extra wall-clock cost (measured: ~15s
+either way for a 5-candidate regression comparison at 400 AND 5,000 rows,
+since folds parallelize across cores via cross_val_score's n_jobs=-1).
 """
 
 import numpy as np
@@ -24,13 +42,22 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, Isol
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import LabelEncoder
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
 from app.services.llm_service import LLMService
 
-CV_FOLDS = 5
+CV_FOLDS = 10
 RANDOM_STATE = 42
+
+# Above 0.05 (the significance threshold), a p-value in this range means
+# arbitration was triggered by a NARROW statistical margin — the models came
+# close to being distinguishable — rather than a deep, unambiguous tie
+# (e.g. p=0.812). confidence = 1 - p_value can look reassuringly high right
+# next to a tie-break narrative in this band (e.g. p=0.062 -> 94%), which
+# reads as contradictory unless the reasoning explicitly says so.
+NARROW_MARGIN_P_THRESHOLD = 0.15
 
 # Default configs used ONLY for the family-vs-family comparison below — the
 # winning algorithm's real hyperparameters are tuned afterwards by
@@ -52,6 +79,50 @@ METRIC_LABELS = {
 try:
     from xgboost import XGBClassifier, XGBRegressor
     _HAS_XGBOOST = True
+
+    class XGBClassifierWithLabelEncoding(XGBClassifier):
+        """
+        XGBoost's classifier requires class labels to be contiguous integers
+        starting at 0 (raises "Invalid classes inferred from unique values
+        of `y`" otherwise) — a constraint plain scikit-learn estimators
+        don't share. Real targets routinely violate it (ratings 1-5, Likert
+        scales, IDs starting at 1), which silently dropped XGBoost from
+        every such comparison (caught by _score_candidates_supervised's
+        try/except, logged as "Failed"). This wraps fit/predict so the
+        remapping is entirely internal: callers (cross_val_score's accuracy
+        scorer, HyperparameterAgent, EvaluationAgent, ExplainabilityAgent —
+        via the pickled model) only ever see the original label space.
+        """
+
+        def fit(self, X, y, **kwargs):
+            # Encode into a local variable first, only assigning to
+            # self._label_encoder AFTER super().fit() returns. XGBClassifier
+            # .fit() internally re-reads self.classes_ (our overridden
+            # property below) to validate it against the y it was just
+            # given — if self._label_encoder were already set at that point,
+            # the property would report the ORIGINAL labels while xgboost
+            # is validating against the ENCODED y, raising the very
+            # "Invalid classes inferred" error this wrapper exists to avoid.
+            encoder = LabelEncoder()
+            y_encoded = encoder.fit_transform(y)
+            result = super().fit(X, y_encoded, **kwargs)
+            self._label_encoder = encoder
+            return result
+
+        def predict(self, X):
+            y_encoded_pred = super().predict(X)
+            return self._label_encoder.inverse_transform(y_encoded_pred)
+
+        @property
+        def classes_(self):
+            # Base XGBClassifier.classes_ is a read-only property returning
+            # np.arange(self.n_classes_) — the encoded 0..k-1 space. Override
+            # it so attribute readers elsewhere (e.g. ExplainabilityAgent's
+            # `class_list = list(getattr(model, "classes_", []))`) see the
+            # original labels that predict() actually returns.
+            if hasattr(self, "_label_encoder"):
+                return self._label_encoder.classes_
+            return super().classes_
 except ImportError:
     _HAS_XGBOOST = False
 
@@ -153,6 +224,17 @@ class ModelSelectionAgent(BaseAgent):
             # uncertainty, arbitration or not, and confidence should say so
             # plainly rather than dress it up.
             confidence = float(min(0.99, 1 - p_value))
+        elif is_unsupervised:
+            # _confidence_from_margin() (below) uses the same unfounded
+            # "0.5 + margin*10" shape that was explicitly rejected for
+            # arbitrated ties (see git history / _confidence_from_margin's
+            # own docstring reference) — reusing it here for clustering/
+            # anomaly_detection would just relocate the same problem rather
+            # than fix it. Silhouette is a real, bounded [-1, 1] statistic,
+            # so the gap between the winner and runner-up is at least a
+            # grounded quantity, even though — unlike 1-p_value — it is not
+            # a statistical test with a formal null hypothesis.
+            confidence = self._confidence_from_unsupervised_margin(results)
         else:
             confidence = self._confidence_from_margin(results)
         selection_decision = self.decide(
@@ -210,7 +292,7 @@ class ModelSelectionAgent(BaseAgent):
                 "RandomForest": RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1),
             }
             if _HAS_XGBOOST:
-                candidates["XGBoost"] = XGBClassifier(
+                candidates["XGBoost"] = XGBClassifierWithLabelEncoding(
                     random_state=RANDOM_STATE, eval_metric="logloss", verbosity=0
                 )
             if _HAS_LIGHTGBM:
@@ -278,6 +360,18 @@ class ModelSelectionAgent(BaseAgent):
         inlier(1)/outlier(-1) partition rather than inventing a third metric
         family — imperfect on an imbalanced partition, but there is no ground
         truth available to do better with.
+
+        This is intentional and consistent across the whole unsupervised
+        path, not a one-off shortcut: HyperparameterAgent.execute()'s
+        `X_train = df.copy()` (its unsupervised branch — same variable name
+        as the supervised branch's real split, but here it IS the full
+        dataset) and EvaluationAgent._evaluate_unsupervised() both fit on
+        the same full preprocessed dataset for the identical reason. There
+        is no held-out split anywhere in the unsupervised pipeline —
+        selection, tuning, and evaluation all score on the same data, since
+        clustering/anomaly detection has no train/test-split concept to
+        hold one out against (see EvaluationAgent's own docstring for the
+        same point from evaluation's side).
         """
         results: List[Dict[str, Any]] = []
         for model_name, model in candidates.items():
@@ -339,13 +433,15 @@ class ModelSelectionAgent(BaseAgent):
 
     def _confidence_from_margin(self, results: List[Dict[str, Any]]) -> float:
         """
-        Fallback confidence for comparisons the Wilcoxon test in
-        _compare_top_two() cannot cover — a single candidate, or the
-        unsupervised branch, which fits once instead of via k-fold CV and so
-        has no per-fold scores to run a signed-rank test on. Reflects how
-        clearly the winner beat the runner-up, not just the raw score: a
-        close race between the top 2 models means the choice is less
-        "confident" even if the winning score is high.
+        Fallback confidence for the single-candidate case (nothing to
+        compare against, so no Wilcoxon and no margin possible) — the
+        unsupervised branch has its own dedicated
+        _confidence_from_unsupervised_margin() instead of this method (see
+        its docstring for why: accuracy/RMSE margins here aren't bounded the
+        way silhouette is, so the same clamp constants don't carry over).
+        Reflects how clearly the winner beat the runner-up, not just the raw
+        score: a close race between the top 2 models means the choice is
+        less "confident" even if the winning score is high.
         """
         if len(results) < 2:
             return 0.9
@@ -354,6 +450,39 @@ class ModelSelectionAgent(BaseAgent):
         # Normalize: a margin >= 0.05 (5 accuracy points, or 0.05 RMSE units) is
         # treated as a clearly confident win.
         return float(min(0.95, 0.5 + margin * 10))
+
+    def _confidence_from_unsupervised_margin(self, results: List[Dict[str, Any]]) -> float:
+        """
+        Heuristic (NOT a statistical test) confidence for the unsupervised
+        branch. _compare_top_two()'s Wilcoxon signed-rank test requires
+        per-fold scores (see its fold_scores guard); _score_candidates_
+        unsupervised() only ever fits once per candidate (no CV — DBSCAN and
+        LocalOutlierFactor(novelty=False) have no out-of-sample .predict()),
+        so there are no per-fold scores to test and no p-value can exist
+        here. This is a substitute measure, not a replacement test.
+
+        It is grounded in the one real signal available: the gap between the
+        winner's and runner-up's silhouette score (used as `mean_score` for
+        BOTH clustering and anomaly_detection — see
+        _score_candidates_unsupervised's docstring; anomaly_detection reuses
+        the same silhouette metric on the inlier/outlier partition, there is
+        no separate "contamination score" computed per candidate to use
+        instead). Silhouette is bounded to [-1, 1], so a gap is a real,
+        interpretable quantity — unlike the flat "0.5 + margin*10" formula
+        this project already rejected for accuracy/RMSE margins in
+        arbitrated ties (see _confidence_from_margin's docstring and git
+        history), which had no such bound to justify its scaling constant.
+
+        A gap of 0.2 (10% of silhouette's full [-1, 1] range) is treated as
+        a clearly cleaner separation for the winner, reaching the ceiling;
+        no gap (a tie) sits at the floor — arbitrary thresholds, but
+        documented ones, not a disguised statistical claim.
+        """
+        if len(results) < 2:
+            return 0.9
+        best_score, second_score = results[0]["mean_score"], results[1]["mean_score"]
+        gap = best_score - second_score  # results is sorted descending, so gap >= 0
+        return float(max(0.5, min(0.95, 0.5 + gap * 2.25)))
 
     def _compare_top_two(
         self, results: List[Dict[str, Any]]
@@ -480,12 +609,31 @@ class ModelSelectionAgent(BaseAgent):
             return name_b
         return name_a
 
+    def _narrow_margin_note(self, p_value: float) -> str:
+        """
+        Flags the specific case that makes confidence=1-p_value read as
+        contradictory: p just above 0.05 (arbitration triggered) still
+        produces a HIGH confidence number, which looks wrong sitting next to
+        a tie-break narrative unless it's made explicit that "arbitrated"
+        does not mean "deeply ambiguous" — p=0.062 and p=0.812 both trigger
+        arbitration, but only one of them was actually close to being
+        statistically decisive.
+        """
+        if p_value < NARROW_MARGIN_P_THRESHOLD:
+            return (
+                " Note: this p-value is close to the significance threshold — the "
+                "arbitration was triggered by a narrow statistical margin, not by a "
+                "fundamentally ambiguous case."
+            )
+        return ""
+
     def _build_significance_note(
         self, p_value: float, results: List[Dict[str, Any]],
         arbitration_entry: Optional[Dict[str, Any]], final_model_name: str,
     ) -> str:
         other_name = results[1]["model_name"] if results[0]["model_name"] == final_model_name else results[0]["model_name"]
         if arbitration_entry:
+            narrow_margin_note = self._narrow_margin_note(p_value)
             if arbitration_entry.get("parsed_recommendation") is None:
                 # _compare_top_two() couldn't find either candidate's name in the
                 # LLM's response, so it fell back to the higher-CV-score model —
@@ -501,6 +649,7 @@ class ModelSelectionAgent(BaseAgent):
                     f"{arbitration_entry['llm_arbitration']} "
                     f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                     f"precisely because the models could not be statistically distinguished."
+                    f"{narrow_margin_note}"
                 )
             raw_top_result = results[0]
             if final_model_name != raw_top_result["model_name"]:
@@ -518,6 +667,7 @@ class ModelSelectionAgent(BaseAgent):
                     f"alternative: {arbitration_entry['llm_arbitration']} "
                     f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                     f"precisely because the models could not be statistically distinguished."
+                    f"{narrow_margin_note}"
                 )
             return (
                 f" A Wilcoxon signed-rank test on the per-fold scores found no statistically significant "
@@ -527,6 +677,7 @@ class ModelSelectionAgent(BaseAgent):
                 f"This low confidence reflects genuine statistical uncertainty — a tie-break was needed "
                 f"precisely because the models could not be statistically distinguished. The LLM "
                 f"arbitration above explains the tie-break reasoning."
+                f"{narrow_margin_note}"
             )
         return (
             f" A Wilcoxon signed-rank test on the per-fold scores confirms this winner over the "
