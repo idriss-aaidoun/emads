@@ -23,6 +23,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, Isol
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import LabelEncoder
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, AgentDecision, UNSUPERVISED_PROBLEM_TYPES
@@ -50,6 +51,38 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)  # keep Streamlit console c
 try:
     from xgboost import XGBClassifier, XGBRegressor
     _HAS_XGBOOST = True
+
+    class XGBClassifierWithLabelEncoding(XGBClassifier):
+        """
+        Mirrors ModelSelectionAgent.XGBClassifierWithLabelEncoding — XGBoost
+        requires contiguous 0-indexed class labels, which real targets
+        (ratings 1-5, Likert scales) routinely violate. The Optuna objective
+        below calls cross_val_score on freshly-built trial models, and the
+        final retrain calls fit() directly on the full training split; both
+        need the same internal remapping so tuning and the final pickled
+        model behave identically to the comparison ModelSelectionAgent ran.
+        """
+
+        def fit(self, X, y, **kwargs):
+            # See ModelSelectionAgent.XGBClassifierWithLabelEncoding.fit for
+            # why self._label_encoder is only assigned AFTER super().fit()
+            # returns (xgboost re-reads self.classes_ mid-fit to validate
+            # against the encoded y, and must see the encoded space then).
+            encoder = LabelEncoder()
+            y_encoded = encoder.fit_transform(y)
+            result = super().fit(X, y_encoded, **kwargs)
+            self._label_encoder = encoder
+            return result
+
+        def predict(self, X):
+            y_encoded_pred = super().predict(X)
+            return self._label_encoder.inverse_transform(y_encoded_pred)
+
+        @property
+        def classes_(self):
+            if hasattr(self, "_label_encoder"):
+                return self._label_encoder.classes_
+            return super().classes_
 except ImportError:
     _HAS_XGBOOST = False
 
@@ -455,7 +488,7 @@ class HyperparameterAgent(BaseAgent):
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
             }
-            cls = XGBClassifier if is_clf else XGBRegressor
+            cls = XGBClassifierWithLabelEncoding if is_clf else XGBRegressor
             extra = {"eval_metric": "logloss", "verbosity": 0} if is_clf else {"verbosity": 0}
             return cls(random_state=RANDOM_STATE, **params, **extra)
 
@@ -521,7 +554,7 @@ class HyperparameterAgent(BaseAgent):
             cls = RandomForestClassifier if is_clf else RandomForestRegressor
             return cls(random_state=RANDOM_STATE, n_jobs=-1, **params)
         if model_name == "XGBoost" and _HAS_XGBOOST:
-            cls = XGBClassifier if is_clf else XGBRegressor
+            cls = XGBClassifierWithLabelEncoding if is_clf else XGBRegressor
             extra = {"eval_metric": "logloss", "verbosity": 0} if is_clf else {"verbosity": 0}
             return cls(random_state=RANDOM_STATE, **params, **extra)
         if model_name == "LightGBM" and _HAS_LIGHTGBM:
