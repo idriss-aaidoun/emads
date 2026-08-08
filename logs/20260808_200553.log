@@ -1,0 +1,26 @@
+2026-08-08 20:06:09 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-08 20:06:09 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-08 20:06:09 | INFO     | emads.model_selection_agent | execute() started
+2026-08-08 20:06:09 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: C:\Users\ThinkPad\AppData\Local\Temp\tmpz725018u\preprocessed.csv
+2026-08-08 20:06:10 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=1.0000±0.0000 metric=accuracy
+2026-08-08 20:06:10 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=0.9833±0.0333 metric=accuracy
+2026-08-08 20:06:11 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=0.9917±0.0250 metric=accuracy
+2026-08-08 20:06:11 | INFO     | emads.model_selection_agent | CV result — model=XGBoost score=0.9667±0.0553 metric=accuracy
+2026-08-08 20:06:15 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=0.9917±0.0250 metric=accuracy
+2026-08-08 20:06:15 | INFO     | emads.model_selection_agent | Wilcoxon p=1.0000 between 'LogisticRegression' and 'RandomForest' — no significant difference, escalating to LLM.
+2026-08-08 20:06:15 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=433 user_chars=200
+2026-08-08 20:06:16 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=455
+2026-08-08 20:06:16 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LogisticRegression score=1.0000
+2026-08-08 20:06:16 | INFO     | emads.llm | LLMService init: model=llama-3.1-8b-instant api_key_present=True api_key_source=LLM_API_KEY
+2026-08-08 20:06:16 | INFO     | emads.llm | Groq client initialized successfully.
+2026-08-08 20:06:16 | INFO     | emads.model_selection_agent | execute() started
+2026-08-08 20:06:16 | DEBUG    | emads.model_selection_agent | Loading preprocessed data from: C:\Users\ThinkPad\AppData\Local\Temp\tmp8xis37no\preprocessed.csv
+2026-08-08 20:06:16 | INFO     | emads.model_selection_agent | CV result — model=LogisticRegression score=1.0000±0.0000 metric=accuracy
+2026-08-08 20:06:16 | INFO     | emads.model_selection_agent | CV result — model=DecisionTree score=0.9857±0.0429 metric=accuracy
+2026-08-08 20:06:17 | INFO     | emads.model_selection_agent | CV result — model=RandomForest score=1.0000±0.0000 metric=accuracy
+2026-08-08 20:06:17 | INFO     | emads.model_selection_agent | CV result — model=XGBoost score=0.9714±0.0571 metric=accuracy
+2026-08-08 20:06:18 | INFO     | emads.model_selection_agent | CV result — model=LightGBM score=1.0000±0.0000 metric=accuracy
+2026-08-08 20:06:18 | INFO     | emads.model_selection_agent | Wilcoxon p=1.0000 between 'LogisticRegression' and 'RandomForest' — no significant difference, escalating to LLM.
+2026-08-08 20:06:18 | INFO     | emads.llm | LLM request start: model=llama-3.1-8b-instant attempt=1 system_chars=433 user_chars=200
+2026-08-08 20:06:18 | INFO     | emads.llm | LLM response received: model=llama-3.1-8b-instant chars=439
+2026-08-08 20:06:18 | INFO     | emads.model_selection_agent | Model selection complete: selected_model=LogisticRegression score=1.0000

@@ -42,6 +42,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, Isol
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import LabelEncoder
 
 from app.core.agents.base_agent import BaseAgent, PartialEMADSState
 from app.core.state.emads_state import EMADSState, UNSUPERVISED_PROBLEM_TYPES
@@ -78,6 +79,50 @@ METRIC_LABELS = {
 try:
     from xgboost import XGBClassifier, XGBRegressor
     _HAS_XGBOOST = True
+
+    class XGBClassifierWithLabelEncoding(XGBClassifier):
+        """
+        XGBoost's classifier requires class labels to be contiguous integers
+        starting at 0 (raises "Invalid classes inferred from unique values
+        of `y`" otherwise) — a constraint plain scikit-learn estimators
+        don't share. Real targets routinely violate it (ratings 1-5, Likert
+        scales, IDs starting at 1), which silently dropped XGBoost from
+        every such comparison (caught by _score_candidates_supervised's
+        try/except, logged as "Failed"). This wraps fit/predict so the
+        remapping is entirely internal: callers (cross_val_score's accuracy
+        scorer, HyperparameterAgent, EvaluationAgent, ExplainabilityAgent —
+        via the pickled model) only ever see the original label space.
+        """
+
+        def fit(self, X, y, **kwargs):
+            # Encode into a local variable first, only assigning to
+            # self._label_encoder AFTER super().fit() returns. XGBClassifier
+            # .fit() internally re-reads self.classes_ (our overridden
+            # property below) to validate it against the y it was just
+            # given — if self._label_encoder were already set at that point,
+            # the property would report the ORIGINAL labels while xgboost
+            # is validating against the ENCODED y, raising the very
+            # "Invalid classes inferred" error this wrapper exists to avoid.
+            encoder = LabelEncoder()
+            y_encoded = encoder.fit_transform(y)
+            result = super().fit(X, y_encoded, **kwargs)
+            self._label_encoder = encoder
+            return result
+
+        def predict(self, X):
+            y_encoded_pred = super().predict(X)
+            return self._label_encoder.inverse_transform(y_encoded_pred)
+
+        @property
+        def classes_(self):
+            # Base XGBClassifier.classes_ is a read-only property returning
+            # np.arange(self.n_classes_) — the encoded 0..k-1 space. Override
+            # it so attribute readers elsewhere (e.g. ExplainabilityAgent's
+            # `class_list = list(getattr(model, "classes_", []))`) see the
+            # original labels that predict() actually returns.
+            if hasattr(self, "_label_encoder"):
+                return self._label_encoder.classes_
+            return super().classes_
 except ImportError:
     _HAS_XGBOOST = False
 
@@ -247,7 +292,7 @@ class ModelSelectionAgent(BaseAgent):
                 "RandomForest": RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1),
             }
             if _HAS_XGBOOST:
-                candidates["XGBoost"] = XGBClassifier(
+                candidates["XGBoost"] = XGBClassifierWithLabelEncoding(
                     random_state=RANDOM_STATE, eval_metric="logloss", verbosity=0
                 )
             if _HAS_LIGHTGBM:
