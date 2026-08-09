@@ -18,6 +18,7 @@ import pandas as pd
 
 from app.core.state.emads_state import create_initial_state, UNSUPERVISED_PROBLEM_TYPES
 from app.core.supervisor.supervisor_agent import SupervisorAgent
+from app.core.agents.data_understanding_agent import COMMON_TARGET_NAMES
 from app.utils.file_utils import ensure_dir, prune_old_files
 import app.utils.logger as logger_utils
 from app.ui import theme
@@ -85,6 +86,33 @@ PROBLEM_TYPE_OPTIONS = {
 }
 
 
+def _no_obvious_target_suggested(df: pd.DataFrame) -> bool:
+    """
+    Purely informational, local mirror of DataUnderstandingAgent.
+    _resolve_target_column's name-match + fallback-confidence logic — run on
+    the already-loaded sidebar preview dataframe so it stays instant (no
+    LLM call, no full-file read, no DataUnderstandingAgent invocation). Never
+    feeds back into the pipeline state; it only decides whether to show a
+    suggestive st.info() hint.
+
+    Mirrors the real agent exactly: a recognized column name
+    (COMMON_TARGET_NAMES) always short-circuits to "looks fine". Otherwise,
+    the same fallback confidence formula (0.55 - unique_ratio * 0.4, clamped
+    to [0.15, 0.55]) is applied to the last column. Below the midpoint of
+    that band (confidence < 0.35, i.e. unique_ratio > 0.5) means the column
+    looks more ID-like than class-like — low enough to flag as a hint, not
+    to decide anything.
+    """
+    name_matches = [col for col in df.columns if col.strip().lower() in COMMON_TARGET_NAMES]
+    if name_matches:
+        return False
+    last_col = df.columns[-1]
+    n_rows = len(df)
+    unique_ratio = df[last_col].nunique(dropna=True) / n_rows if n_rows else 1.0
+    confidence = max(0.15, min(0.55, 0.55 - unique_ratio * 0.4))
+    return confidence < 0.35
+
+
 def render_sidebar():
     st.sidebar.toggle("🌙 Dark mode", key="dark_mode")
     st.sidebar.markdown('<div class="sidebar-section-label">📁 Dataset</div>', unsafe_allow_html=True)
@@ -106,6 +134,15 @@ def render_sidebar():
 
             problem_type_label = st.sidebar.selectbox("🧩 Problem type", options=list(PROBLEM_TYPE_OPTIONS.keys()))
             problem_type = PROBLEM_TYPE_OPTIONS[problem_type_label]
+
+            # Purely informational — never presets target_column or problem_type,
+            # only shown while the user hasn't made an explicit choice yet.
+            if problem_type_label == "Auto-detect" and _no_obvious_target_suggested(preview_df):
+                st.sidebar.info(
+                    "💡 No column looks like an obvious prediction target — if "
+                    "you're not trying to predict a value, consider Clustering / "
+                    "Anomaly Detection instead."
+                )
 
             if problem_type in UNSUPERVISED_PROBLEM_TYPES:
                 st.sidebar.caption("Unsupervised problem type — no target column needed; every column is used as a feature.")
