@@ -17,6 +17,19 @@ if os.path.exists(_env_path):
 else:
     load_dotenv(find_dotenv(), override=True)
 
+# Streamlit Community Cloud has no .env file — secrets are entered in the app's
+# dashboard and surface only via st.secrets, never os.environ. Mirror them into
+# os.environ (without overriding a local .env) so _resolve_api_key() below stays
+# the single source of truth for both environments.
+try:
+    import streamlit as st
+
+    for _key in ("GROQ_API_KEY", "LLM_API_KEY", "DEFAULT_MODEL_NAME"):
+        if not os.getenv(_key) and _key in st.secrets:
+            os.environ[_key] = str(st.secrets[_key])
+except Exception:
+    pass
+
 logger = get_logger("emads.llm")
 
 

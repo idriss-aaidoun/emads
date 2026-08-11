@@ -15,6 +15,7 @@ env/
 
 # --- Environment variables (contains API keys!) ---
 .env
+.streamlit/secrets.toml
 
 # --- IDE / Editor settings ---
 .vscode/
