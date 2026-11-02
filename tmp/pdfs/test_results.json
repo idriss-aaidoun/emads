@@ -1,0 +1,105 @@
+{
+  "command": ".\\venv\\Scripts\\python.exe tmp/pdfs/run_existing_tests.py",
+  "tests_run": 23,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "seconds": 56.163,
+  "records": [
+    {
+      "test": "tests.test_explainability_unsupervised.ExplainabilityUnsupervisedSkipTests.test_dbscan_skips_shap",
+      "seconds": 0.151
+    },
+    {
+      "test": "tests.test_explainability_unsupervised.ExplainabilityUnsupervisedSkipTests.test_isolation_forest_skips_shap",
+      "seconds": 0.267
+    },
+    {
+      "test": "tests.test_explainability_unsupervised.ExplainabilityUnsupervisedSkipTests.test_kmeans_skips_shap",
+      "seconds": 0.153
+    },
+    {
+      "test": "tests.test_explainability_unsupervised.ExplainabilityUnsupervisedSkipTests.test_local_outlier_factor_skips_shap",
+      "seconds": 0.039
+    },
+    {
+      "test": "tests.test_explainability_unsupervised.ExplainabilityUnsupervisedSkipTests.test_skip_reasoning_says_skipped_by_design",
+      "seconds": 0.022
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionArbitrationTests.test_llm_recommendation_overrides_higher_score",
+      "seconds": 0.008
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionArbitrationTests.test_malformed_llm_response_falls_back_to_highest_score",
+      "seconds": 0.005
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionArbitrationTests.test_significance_note_does_not_claim_recommendation_on_parse_failure",
+      "seconds": 0.004
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionExecuteArbitrationTests.test_reasoning_does_not_falsely_claim_best_score_for_promoted_runner_up",
+      "seconds": 0.055
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionExecuteArbitrationTests.test_selected_model_name_falls_back_deterministically_on_parse_failure",
+      "seconds": 0.017
+    },
+    {
+      "test": "tests.test_model_selection_arbitration.ModelSelectionExecuteArbitrationTests.test_selected_model_name_follows_llm_recommendation_over_higher_score",
+      "seconds": 0.016
+    },
+    {
+      "test": "tests.test_pipeline_edge_cases.PipelineEdgeCaseTests.test_categorical_target_uses_classification_metrics",
+      "seconds": 16.518
+    },
+    {
+      "test": "tests.test_pipeline_edge_cases.PipelineEdgeCaseTests.test_empty_target_column_raises_clear_error",
+      "seconds": 2.385
+    },
+    {
+      "test": "tests.test_pipeline_edge_cases.PipelineEdgeCaseTests.test_numeric_target_uses_regression_metrics",
+      "seconds": 6.595
+    },
+    {
+      "test": "tests.test_target_arbitration_confidence.TargetArbitrationConfidenceTests.test_confidence_stays_within_documented_arbitration_band",
+      "seconds": 0.003
+    },
+    {
+      "test": "tests.test_target_arbitration_confidence.TargetArbitrationConfidenceTests.test_low_and_high_unique_ratio_suggestions_produce_different_confidences",
+      "seconds": 0.014
+    },
+    {
+      "test": "tests.test_target_arbitration_confidence.TargetArbitrationConfidenceTests.test_reasoning_never_asks_llm_to_self_rate_confidence",
+      "seconds": 0.002
+    },
+    {
+      "test": "tests.test_unsupervised_pipeline.UnsupervisedPipelineTests.test_anomaly_detection_produces_anomaly_metrics",
+      "seconds": 8.514
+    },
+    {
+      "test": "tests.test_unsupervised_pipeline.UnsupervisedPipelineTests.test_clustering_produces_silhouette_metrics",
+      "seconds": 4.574
+    },
+    {
+      "test": "tests.test_unsupervised_pipeline.UnsupervisedPipelineTests.test_unsupervised_requires_minimum_rows",
+      "seconds": 0.049
+    },
+    {
+      "test": "tests.test_xgboost_label_encoding.HyperparameterAgentXGBoostNonContiguousClassesTests.test_tuning_and_final_pickle_survive_non_contiguous_classes",
+      "seconds": 8.444
+    },
+    {
+      "test": "tests.test_xgboost_label_encoding.ModelSelectionXGBoostNonContiguousClassesTests.test_non_contiguous_classes_no_longer_fail",
+      "seconds": 5.072
+    },
+    {
+      "test": "tests.test_xgboost_label_encoding.ModelSelectionXGBoostNonContiguousClassesTests.test_zero_indexed_contiguous_classes_still_work",
+      "seconds": 3.255
+    }
+  ],
+  "failure_details": [],
+  "error_details": [],
+  "conditions": "Offline LLM; dotenv loading suppressed; socket connections blocked; joblib threading backend; native thread pools limited to one; cwd isolated."
+}

@@ -1,0 +1,107 @@
+{
+  "versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "scipy": "1.18.0",
+    "scikit-learn": "1.9.0",
+    "xgboost": "3.3.0",
+    "lightgbm": "4.7.0",
+    "optuna": "4.9.0",
+    "shap": "0.52.0",
+    "langgraph": "1.2.8",
+    "streamlit": "1.59.0",
+    "groq": "1.5.0",
+    "reportlab": "5.0.0",
+    "PyMuPDF": "1.28.0"
+  },
+  "historical_reports": [
+    {
+      "file": "reports/EMADS_Report_20260809_135904.pdf",
+      "pages": 8,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    },
+    {
+      "file": "reports/EMADS_Report_20260809_140002.pdf",
+      "pages": 6,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": false
+    },
+    {
+      "file": "reports/EMADS_Report_20260809_140010.pdf",
+      "pages": 6,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": false
+    },
+    {
+      "file": "reports/EMADS_Report_20260809_141802.pdf",
+      "pages": 12,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    },
+    {
+      "file": "reports/EMADS_Report_20260809_142122.pdf",
+      "pages": 12,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    },
+    {
+      "file": "reports/EMADS_Report_20260809_142934.pdf",
+      "pages": 7,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": false
+    },
+    {
+      "file": "reports/EMADS_Report_20260810_175954.pdf",
+      "pages": 11,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    },
+    {
+      "file": "reports/EMADS_Report_20260810_180846.pdf",
+      "pages": 13,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    },
+    {
+      "file": "reports/EMADS_Report_20260810_182100.pdf",
+      "pages": 11,
+      "has_statistical_verdict": true,
+      "has_confidence_audit": true,
+      "claims_statistics_grounded": true,
+      "has_local_explanations": true
+    }
+  ],
+  "parser_negation": "RandomForest",
+  "wilcoxon_exact_5": 0.0625,
+  "wilcoxon_exact_10": 0.001953125,
+  "wilcoxon_all_zero_default": "1.0",
+  "offline_target_fallback": {
+    "column": "rating",
+    "confidence": 0.73,
+    "claims_llm_arbitration": true,
+    "log_entries": 1
+  },
+  "xgb_refit": "ValueError: Invalid classes inferred from unique values of `y`.  Expected: [1 2 3], got [0 1 2]",
+  "zero_difference_comparison": {
+    "p_value": "1.0",
+    "arbitration": true,
+    "llm_calls": 1
+  }
+}
